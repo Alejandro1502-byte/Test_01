@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,8 +8,13 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
-        body { margin: 0; padding: 0; font-family: Arial, sans-serif; display: flex; }
-        
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            display: flex;
+        }
+
         /* Panel lateral de controles */
         #sidebar {
             width: 350px;
@@ -18,40 +24,112 @@
             box-sizing: border-box;
             overflow-y: auto;
             border-right: 1px solid #ccc;
-            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+            box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
         }
 
-        #map { flex-grow: 1; height: 100vh; }
+        #map {
+            flex-grow: 1;
+            height: 100vh;
+        }
 
-        h2, h3 { color: #333; margin-top: 0; }
-        
-        .control-group { margin-bottom: 15px; border-bottom: 1px solid #ddd; padding-bottom: 10px; }
-        .control-group label { display: block; font-size: 12px; color: #666; margin-top: 5px; }
-        .control-group input { width: 100%; padding: 5px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
-        
+        h2,
+        h3 {
+            color: #333;
+            margin-top: 0;
+        }
+
+        .control-group {
+            margin-bottom: 15px;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 10px;
+        }
+
+        .control-group label {
+            display: block;
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .control-group input {
+            width: 100%;
+            padding: 5px;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
         /* Botones de selección de puntos */
         .btn-point {
-            width: 100%; padding: 8px; margin-bottom: 5px; cursor: pointer;
-            border: 1px solid #ccc; border-radius: 4px; background: white; text-align: left;
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 5px;
+            cursor: pointer;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background: white;
+            text-align: left;
             font-size: 13px;
         }
-        .btn-point:hover { background: #eee; }
-        .btn-point.active { background: #e3f2fd; border-color: #2196F3; font-weight: bold; }
-        .status-ok { color: green; float: right; font-weight: bold; }
+
+        .btn-point:hover {
+            background: #eee;
+        }
+
+        .btn-point.active {
+            background: #e3f2fd;
+            border-color: #2196F3;
+            font-weight: bold;
+        }
+
+        .status-ok {
+            color: green;
+            float: right;
+            font-weight: bold;
+        }
 
         /* Botón principal */
         #btnCalcular {
-            width: 100%; padding: 12px; background: #4CAF50; color: white; border: none;
-            border-radius: 4px; font-size: 16px; cursor: pointer; margin-top: 10px;
+            width: 100%;
+            padding: 12px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 10px;
         }
-        #btnCalcular:hover { background: #45a049; }
+
+        #btnCalcular:hover {
+            background: #45a049;
+        }
 
         /* Resultados */
-        #resultados { margin-top: 20px; background: #fff; padding: 10px; border-radius: 4px; border: 1px solid #ddd; display: none; }
-        .res-row { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 5px; border-bottom: 1px dotted #eee; }
-        .res-val { font-weight: bold; color: #2196F3; }
+        #resultados {
+            margin-top: 20px;
+            background: #fff;
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            display: none;
+        }
+
+        .res-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            margin-bottom: 5px;
+            border-bottom: 1px dotted #eee;
+        }
+
+        .res-val {
+            font-weight: bold;
+            color: #2196F3;
+        }
     </style>
 </head>
+
 <body>
 
     <div id="sidebar">
@@ -104,20 +182,20 @@
     <div id="map"></div>
 
     <script>
-        // --- CONFIGURACIÓN INICIAL DEL MAPA ---
-        var map = L.map('map').setView([40.416775, -3.703790], 15); // Madrid por defecto
+        // Configuración del mapa
+        var map = L.map('map').setView([40.416775, -3.703790], 15);
         L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19, attribution: '© OpenStreetMap'
         }).addTo(map);
 
-        // --- VARIABLES DE ESTADO ---
+        // Variables de estado
         var puntos = {
             takeoff: null,
             landing: null,
             c1: null,
             c2: null
         };
-        
+
         var marcadores = {
             takeoff: null,
             landing: null,
@@ -131,7 +209,7 @@
 
         var modoSeleccion = null; // 'takeoff', 'landing', 'c1', 'c2' o null
 
-        // --- ICONOS ---
+        // Iconos
         var iconH = new L.Icon({
             iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png',
             iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34]
@@ -145,16 +223,16 @@
             iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34]
         });
 
-        // --- LÓGICA DE INTERACCIÓN ---
+        // Lógica de interacción
 
         function activarSeleccion(tipo) {
             modoSeleccion = tipo;
             // Actualizar estilo botones
             document.querySelectorAll('.btn-point').forEach(b => b.classList.remove('active'));
-            if(tipo) document.getElementById(tipo === 'c1' || tipo === 'c2' ? 'btn' + tipo.toUpperCase() : 'btn' + tipo.charAt(0).toUpperCase() + tipo.slice(1)).classList.add('active');
+            if (tipo) document.getElementById(tipo === 'c1' || tipo === 'c2' ? 'btn' + tipo.toUpperCase() : 'btn' + tipo.charAt(0).toUpperCase() + tipo.slice(1)).classList.add('active');
         }
 
-        map.on('click', function(e) {
+        map.on('click', function (e) {
             if (!modoSeleccion) return;
 
             // Guardar coordenada
@@ -168,12 +246,12 @@
             if (modoSeleccion === 'landing') icono = iconFlag;
 
             // Crear marcador
-            marcadores[modoSeleccion] = L.marker(e.latlng, {icon: icono}).addTo(map)
+            marcadores[modoSeleccion] = L.marker(e.latlng, { icon: icono }).addTo(map)
                 .bindPopup(modoSeleccion.toUpperCase());
 
             // Marcar como listo en la UI
             document.getElementById('st-' + modoSeleccion).innerHTML = '✔';
-            
+
             // Dibujar rectángulo si tenemos las dos esquinas
             dibujarAreaPrevia();
 
@@ -186,12 +264,12 @@
             areaLayer.clearLayers();
             if (puntos.c1 && puntos.c2) {
                 var bounds = [puntos.c1, puntos.c2];
-                L.rectangle(bounds, {color: "#ff7800", weight: 1, fillOpacity: 0.1}).addTo(areaLayer);
+                L.rectangle(bounds, { color: "#ff7800", weight: 1, fillOpacity: 0.1 }).addTo(areaLayer);
             }
         }
 
-        // --- FUNCIONES AUXILIARES MATEMÁTICAS ---
-        
+        // Funciones auxiliares matemáticas
+
         function metrosAGradosLat(metros) {
             return metros / 111320;
         }
@@ -204,20 +282,20 @@
         }
 
         function distanciaHaversine(lat1, lon1, lat2, lon2) {
-            var R = 6371000; 
+            var R = 6371000;
             var dLat = (lat2 - lat1) * Math.PI / 180;
             var dLon = (lon2 - lon1) * Math.PI / 180;
-            var a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-                    Math.sin(dLon/2) * Math.sin(dLon/2);
-            var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
             return R * c;
         }
 
-        // --- LÓGICA PRINCIPAL DEL EJERCICIO ---
+        // Lógica principal del ejercicio
 
         function calcularMision() {
-            // 0. Validar entradas
+            // Validar entradas
             if (!puntos.takeoff || !puntos.landing || !puntos.c1 || !puntos.c2) {
                 alert("Por favor, define todos los puntos en el mapa (Takeoff, Landing y las 2 Esquinas).");
                 return;
@@ -235,8 +313,8 @@
             var solapeFront = parseFloat(document.getElementById('solapeFront').value);
             var solapeSide = parseFloat(document.getElementById('solapeSide').value);
 
-            // --- TAREA 1: CÁLCULOS FOTOGRAMÉTRICOS ---
-            
+            // Tarea 1: Cálculos fotoGRAMÉTRICOS
+
             // a) GSD (Ground Sample Distance)
             // formula: (Altura * TamañoPixelSensor) / Focal
             var tamanoPixelMm = sensorW / pixW; // mm/pixel
@@ -253,8 +331,8 @@
             // d) Separación entre fotos (Front lap) - Eje Y (Latitud)
             var sepFotos = huellaAlto * (1 - solapeFront / 100);
 
-            // --- TAREA 2: GENERAR WAYPOINTS (ZIGZAG) ---
-            
+            // Tarea 2: Generar waypoints (zigzag)
+
             // 1. Determinar límites (Bounding Box)
             var latMin = Math.min(puntos.c1.lat, puntos.c2.lat);
             var latMax = Math.max(puntos.c1.lat, puntos.c2.lat);
@@ -268,8 +346,8 @@
             var degSepFotos = metrosAGradosLat(sepFotos);
 
             var waypoints = [];
-            
-            // 3. Algoritmo "Cortacésped"
+
+            // 3. Algoritmo 
             // Iteramos en Longitud (Pasadas Norte-Sur moviéndonos hacia el Este)
             // Dirección inicial de la pasada: hacia abajo (Norte -> Sur) = false, o arriba = true.
             var goingUp = false; // Empezamos bajando desde el máximo Lat
@@ -277,19 +355,19 @@
             // Ajustamos el inicio para centrar un poco o empezar en el borde
             // Empezamos en lngMin + mitad de huella (opcional) o directamente en lngMin
             for (let lng = lngMin; lng <= lngMax; lng += degSepPasadas) {
-                
+
                 // Definir inicio y fin de la pasada actual según dirección
                 let latStart = goingUp ? latMin : latMax;
                 let latEnd = goingUp ? latMax : latMin;
-                
+
                 // Bucle interno: Recorrer latitud (hacer fotos)
                 // Usamos un while para controlar la condición de parada flotante
                 let currentLat = latStart;
-                
+
                 // Generar puntos en la línea
                 while ((goingUp && currentLat <= latEnd) || (!goingUp && currentLat >= latEnd)) {
                     waypoints.push([currentLat, lng]);
-                    
+
                     // Avanzar
                     if (goingUp) currentLat += degSepFotos;
                     else currentLat -= degSepFotos;
@@ -303,14 +381,14 @@
 
             // Array completo de ruta: Takeoff -> Waypoints -> Landing
             var rutaVuelo = [];
-            
+
             // Agregar Takeoff
             rutaVuelo.push([puntos.takeoff.lat, puntos.takeoff.lng]);
-            
+
             // Agregar Waypoints calculados
             waypoints.forEach((wp, index) => {
                 rutaVuelo.push(wp);
-                
+
                 // Dibujar el punto de la foto
                 L.circleMarker(wp, {
                     radius: 3,
@@ -324,30 +402,31 @@
             rutaVuelo.push([puntos.landing.lat, puntos.landing.lng]);
 
             // Dibujar la polilínea
-            var polyline = L.polyline(rutaVuelo, {color: 'blue', weight: 3}).addTo(missionLayer);
-            
+            var polyline = L.polyline(rutaVuelo, { color: 'blue', weight: 3 }).addTo(missionLayer);
+
             // Ajustar vista del mapa para ver toda la misión
-            map.fitBounds(polyline.getBounds(), {padding: [50, 50]});
+            map.fitBounds(polyline.getBounds(), { padding: [50, 50] });
 
             // --- TAREA 4: MOSTRAR RESULTADOS ---
-            
+
             document.getElementById('resultados').style.display = 'block';
             document.getElementById('resGSD').innerText = gsdCm.toFixed(2) + " cm/px";
             document.getElementById('resHuella').innerText = huellaAncho.toFixed(1) + " x " + huellaAlto.toFixed(1) + " m";
             document.getElementById('resSepPass').innerText = sepPasadas.toFixed(2) + " m";
             document.getElementById('resSepFoto').innerText = sepFotos.toFixed(2) + " m";
             document.getElementById('resWP').innerText = waypoints.length;
-            
+
             // Calculo simple de distancia total acumulada
             var distanciaTotal = 0;
-            for(let i=0; i<rutaVuelo.length-1; i++){
+            for (let i = 0; i < rutaVuelo.length - 1; i++) {
                 distanciaTotal += distanciaHaversine(
-                    rutaVuelo[i][0], rutaVuelo[i][1], 
-                    rutaVuelo[i+1][0], rutaVuelo[i+1][1]
+                    rutaVuelo[i][0], rutaVuelo[i][1],
+                    rutaVuelo[i + 1][0], rutaVuelo[i + 1][1]
                 );
             }
-            document.getElementById('resDist').innerText = (distanciaTotal/1000).toFixed(2) + " km";
+            document.getElementById('resDist').innerText = (distanciaTotal / 1000).toFixed(2) + " km";
         }
     </script>
 </body>
+
 </html>
