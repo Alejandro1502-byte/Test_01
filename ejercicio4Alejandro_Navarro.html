@@ -175,15 +175,14 @@
     </div>
 
     <div id="map"></div>
-    <!-- Sacamos los puntos de take off and landing y ambos waypoints con open street map -->
+    <!-- // Sacamos los puntos de take off and landing y ambos waypoints con open street map  -->
     <script>
-        // --- CONFIGURACIÓN INICIAL DEL MAPA ---
-        var map = L.map('map').setView([40.416775, -3.703790], 15); // Madrid por defecto
+        // Configuración inical del mapa
+        var map = L.map('map').setView([40.416775, -3.703790], 15); 
         L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19, attribution: '© OpenStreetMap'
         }).addTo(map);
 
-        // --- VARIABLES DE ESTADO ---
         var puntos = {
             takeoff: null,
             landing: null,
@@ -217,7 +216,6 @@
             iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34]
         });
 
-        // --- LÓGICA DE INTERACCIÓN ---
 
         function activarSeleccion(tipo) {
             modoSeleccion = tipo;
@@ -241,10 +239,9 @@
 
             document.getElementById('st-' + modoSeleccion).innerHTML = '✔';
 
-            // Dibujar rectángulo si tenemos las dos esquinas
+            // Dibujar rectángulo si tenemos las dos esquinas para definir el área de la misión
             dibujarAreaPrevia();
 
-            // Desactivar modo seleccion de punto
             modoSeleccion = null;
             document.querySelectorAll('.btn-point').forEach(b => b.classList.remove('active'));
         });
@@ -257,14 +254,13 @@
             }
         }
 
-        // --- FUNCIONES AUXILIARES MATEMÁTICAS ---
+        // Funciones de conversión de unidades (metro a grados para latitud y longitud)
         
         function metrosAGradosLat(metros) {
             return metros / 111320;
         }
 
         function metrosAGradosLng(metros, latitud) {
-            // El radio de la tierra varía con la latitud para la longitud
             var radio = 111320 * Math.cos(latitud * Math.PI / 180);
             return metros / radio;
         }
@@ -280,10 +276,10 @@
             return R * c;
         }
 
-        // --- LÓGICA PRINCIPAL DEL EJERCICIO ---
+        // Logica principal para calcular la misión de vuelo fotogramétrico
 
         function calcularMision() {
-            // Validar entradas
+            // Validar las variables necesarias de entrada
             if (!puntos.takeoff || !puntos.landing || !puntos.c1 || !puntos.c2) {
                 alert("Por favor, define todos los puntos en el mapa (Takeoff, Landing y las 2 Esquinas).");
                 return;
@@ -300,7 +296,6 @@
             var solapeFront = parseFloat(document.getElementById('solapeFront').value);
             var solapeSide = parseFloat(document.getElementById('solapeSide').value);
 
-            // --- TAREA 1: CÁLCULOS FOTOGRAMÉTRICOS ---
             
             // a) GSD (Ground Sample Distance)
             // formula: (Altura * TamañoPixelSensor) / Focal
@@ -308,7 +303,7 @@
             var gsdM = (altura * tamanoPixelMm) / focal; // metros/pixel
             var gsdCm = gsdM * 100; // cm/pixel
 
-            // b) Huella (Footprint) en metros
+            // b) Huella de la fotografia en metros
             var huellaAncho = gsdM * pixW;
             var huellaAlto = gsdM * pixH;
 
@@ -318,9 +313,9 @@
             // d) Separación entre fotos (Front lap) - Eje Y (Latitud)
             var sepFotos = huellaAlto * (1 - solapeFront / 100);
 
-            // --- TAREA 2: GENERAR WAYPOINTS (ZIGZAG) ---
+            // Siguiente parte es calcular los waypoints
             
-            // 1. Determinar límites (Bounding Box)
+            // 1. Determinar límites 
             var latMin = Math.min(puntos.c1.lat, puntos.c2.lat);
             var latMax = Math.max(puntos.c1.lat, puntos.c2.lat);
             var lngMin = Math.min(puntos.c1.lng, puntos.c2.lng);
@@ -334,49 +329,36 @@
 
             var waypoints = [];
             
-            // 3. Algoritmo "Cortacésped"
-            // Iteramos en Longitud (Pasadas Norte-Sur moviéndonos hacia el Este)
-            // Dirección inicial de la pasada: hacia abajo (Norte -> Sur) = false, o arriba = true.
-            var goingUp = false; // Empezamos bajando desde el máximo Lat
+            // 3. Algoritmo principal
+            var goingUp = false; 
 
-            // Ajustamos el inicio para centrar un poco o empezar en el borde
-            // Empezamos en lngMin + mitad de huella (opcional) o directamente en lngMin
             for (let lng = lngMin; lng <= lngMax; lng += degSepPasadas) {
 
-                // Definir inicio y fin de la pasada actual según dirección
                 let latStart = goingUp ? latMin : latMax;
                 let latEnd = goingUp ? latMax : latMin;
 
-                // Bucle interno: Recorrer latitud (hacer fotos)
-                // Usamos un while para controlar la condición de parada flotante
                 let currentLat = latStart;
 
-                // Generar puntos en la línea
                 while ((goingUp && currentLat <= latEnd) || (!goingUp && currentLat >= latEnd)) {
                     waypoints.push([currentLat, lng]);
 
-                    // Avanzar
                     if (goingUp) currentLat += degSepFotos;
                     else currentLat -= degSepFotos;
                 }
 
-                // Invertir dirección para la siguiente pasada
                 goingUp = !goingUp;
             }
             
-            // TAREA 3: DIBUJAR EN EL MAPA
+            // Siguiente parte es dibujar en el mapa
 
-            // Array completo de ruta: Takeoff -> Waypoints -> Landing
+            // Metemos la ruta de vuelo en un array (Takeoff, Waypoints, Landing)
             var rutaVuelo = [];
 
-            // Agregar Takeoff
             rutaVuelo.push([puntos.takeoff.lat, puntos.takeoff.lng]);
 
-            // Agregar Waypoints calculados
             waypoints.forEach((wp, index) => {
                 rutaVuelo.push(wp);
 
-                // Dibujar el punto de la foto
                 L.circleMarker(wp, {
                     radius: 3,
                     color: 'red',
@@ -385,16 +367,14 @@
                 }).addTo(missionLayer).bindPopup("Foto #" + (index + 1));
             });
 
-            // Agregar Landing
             rutaVuelo.push([puntos.landing.lat, puntos.landing.lng]);
 
-            // Dibujar la polilínea
             var polyline = L.polyline(rutaVuelo, { color: 'blue', weight: 3 }).addTo(missionLayer);
 
-            // Ajustar vista del mapa para ver toda la misión
+            // Ajustar vista del mapa para ver toda la misión al completo
             map.fitBounds(polyline.getBounds(), { padding: [50, 50] });
 
-            // --- TAREA 4: MOSTRAR RESULTADOS ---
+            // Parte de muestreo de resultados en el panel lateral
             
             document.getElementById('resultados').style.display = 'block';
             document.getElementById('resGSD').innerText = gsdCm.toFixed(2) + " cm/px";
@@ -403,7 +383,6 @@
             document.getElementById('resSepFoto').innerText = sepFotos.toFixed(2) + " m";
             document.getElementById('resWP').innerText = waypoints.length;
 
-            // Calculo simple de distancia total acumulada
             var distanciaTotal = 0;
             for (let i = 0; i < rutaVuelo.length - 1; i++) {
                 distanciaTotal += distanciaHaversine(
