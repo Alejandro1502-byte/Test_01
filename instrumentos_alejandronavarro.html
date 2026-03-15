@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Drone Sim</title>
+<!-- Librerías que uso de leaflet -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:monospace;user-select:none}
+body{background:#0a0c10;color:#cde;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+
+#bar{height:36px;background:#111;border-bottom:1px solid #222;display:flex;align-items:center;padding:0 14px;gap:18px;font-size:11px;color:#556}
+#bar b{color:#4af}#bar .g b{color:#3d9}#bar .a b{color:#fa0}
+#arm-top{margin-left:auto;padding:3px 12px;border:1px solid;border-radius:3px;cursor:pointer;font-size:10px;letter-spacing:2px}
+#arm-top.on{color:#3d9;border-color:#3d9}.arm-top.off{color:#f44;border-color:#f44}
+
+#body{flex:1;display:grid;grid-template-columns:1fr 340px;min-height:0}
+#map{width:100%;height:100%}
+
+/* PANEL */
+#panel{background:#0e1016;border-left:1px solid #1e2230;display:flex;flex-direction:column;overflow:hidden}
+.ptitle{font-size:8px;letter-spacing:2px;color:#334;padding:6px 10px 4px;border-bottom:1px solid #181c24;background:#0b0d12}
+
+/* INSTRUMENTS grid */
+#inst{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:8px;flex-shrink:0}
+.iw{display:flex;flex-direction:column;align-items:center;gap:2px}
+.iw canvas{border-radius:50%}
+.iw span{font-size:7px;color:#334;letter-spacing:1px}
+
+/* THROTTLE + CONTROLS */
+#ctrl{display:flex;gap:0;flex-shrink:0;border-top:1px solid #181c24}
+
+/* Throttle slider */
+#tbox{width:56px;background:#0b0d12;border-right:1px solid #181c24;display:flex;flex-direction:column;align-items:center;padding:8px 0 6px;gap:3px}
+#tbox .lbl{font-size:7px;color:#334;letter-spacing:1px}
+#ttrack{width:28px;flex:1;min-height:80px;background:#070810;border:1px solid #1e2230;border-radius:4px;position:relative;cursor:ns-resize;touch-action:none;overflow:hidden}
+#tfill{position:absolute;left:0;right:0;bottom:0;height:0;background:linear-gradient(0deg,#0a2e1a,#3d9);border-radius:3px}
+#tknob{position:absolute;left:2px;right:2px;height:5px;background:#fff;border-radius:3px;bottom:0;box-shadow:0 0 8px #fff;z-index:2}
+#tpct{font-size:13px;color:#3d9;font-weight:bold}
+
+#keys{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:8px}
+.krow{display:flex;gap:4px}
+.k{width:52px;height:48px;background:#0e1016;border:1px solid #222;border-bottom:3px solid #080a0e;border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;font-size:18px;color:#445;transition:all .08s;touch-action:none}
+.k span{font-size:8px;color:#333;margin-top:2px}
+.k.lit{background:#0a1a0e;border-color:#3d9;border-bottom-color:#0a1208;color:#3d9;box-shadow:0 0 10px rgba(0,255,136,.2)}
+.k.wide{width:110px}
+
+#bottom{border-top:1px solid #181c24;padding:6px 8px;display:flex;flex-direction:column;gap:5px}
+#arm-btn{padding:8px;background:#0a1a0e;border:1.5px solid #3d9;border-radius:4px;color:#3d9;cursor:pointer;text-align:center;font-size:11px;letter-spacing:2px}
+#arm-btn.off{background:#1a0a0a;border-color:#f44;color:#f44}
+.mgrid{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.m{background:#0b0d12;border:1px solid #181c24;border-radius:3px;padding:3px 6px;font-size:9px}
+.mt{display:flex;justify-content:space-between;margin-bottom:2px}
+.mn{color:#334}.mr{color:#3d9;font-size:11px;font-weight:bold}
+.mb{height:3px;background:#141820;border-radius:2px;overflow:hidden}
+.mf{height:100%;background:linear-gradient(90deg,#3d9,#4af);transition:width .1s}
+</style>
+</head>
+<body>
+
+<div id="bar">
+  <b style="color:#fff;font-size:14px;letter-spacing:3px">DRONE<span style="color:#4af">SIM</span></b>
+  <div class="g">ALT <b id="b-alt">0m</b></div>
+  <div>SPD <b id="b-spd">0.0</b>m/s</div>
+  <div class="a">HDG <b id="b-hdg">000°</b></div>
+  <div class="g">VUELO <b id="b-time">00:00</b></div>
+  <div id="arm-top" class="on" onclick="arm()">✦ ARMADO</div>
+</div>
+
+<div id="body">
+  <div id="map"></div>
+<!-- Panel de instrumentos hecho con canvas  -->
+  <div id="panel">
+    <div class="ptitle">INSTRUMENTOS</div>
+    <div id="inst">
+      <div class="iw"><canvas id="cH" width="98" height="98"></canvas><span>HORIZONTE</span></div>
+      <div class="iw"><canvas id="cA" width="98" height="98"></canvas><span>ALTÍMETRO</span></div>
+      <div class="iw"><canvas id="cR" width="98" height="98"></canvas><span>RUMBO</span></div>
+      <div class="iw"><canvas id="cV" width="98" height="98"></canvas><span>VELOCIDAD</span></div>
+      <div class="iw"><canvas id="cS" width="98" height="98"></canvas><span>VARIÓMETRO</span></div>
+      <div class="iw"><canvas id="cT" width="98" height="98"></canvas><span>VIRAJE</span></div>
+    </div>
+
+    <div class="ptitle">THROTTLE (GAS) + MOVIMIENTO</div>
+    <div id="ctrl">
+      <!-- Throttle -->
+      <div id="tbox">
+        <div class="lbl">GAS</div>
+        <div id="ttrack"><div id="tfill"></div><div id="tknob"></div></div>
+        <div id="tpct">0%</div>
+      </div>
+      <div id="keys">
+        <div class="krow">
+          <div class="k" id="kU" onpointerdown="kd('U')" onpointerup="ku('U')">↑<span>SUBIR</span></div>
+          <div class="k" id="kW" onpointerdown="kd('W')" onpointerup="ku('W')">▲<span>AVANZAR</span></div>
+          <div class="k" id="kD" onpointerdown="kd('D')" onpointerup="ku('D')">↓<span>BAJAR</span></div>
+        </div>
+        <div class="krow">
+          <div class="k" id="kA" onpointerdown="kd('A')" onpointerup="ku('A')">◀<span>GIRAR</span></div>
+          <div class="k" id="kS" onpointerdown="kd('S')" onpointerup="ku('S')">▼<span>ATRÁS</span></div>
+          <div class="k" id="kE" onpointerdown="kd('E')" onpointerup="ku('E')">▶<span>GIRAR</span></div>
+        </div>
+        <div class="krow">
+          <div class="k wide" id="kL" onpointerdown="kd('L')" onpointerup="ku('L')">◀ LATERAL ▶<span>desplazar</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="bottom">
+      <div id="arm-btn" onclick="arm()">✦ ARMAR / DESARMAR</div>
+      <div class="mgrid">
+        <div class="m"><div class="mt"><span class="mn">M1 DEL-IZQ</span><span class="mr" id="r1">—</span></div><div class="mb"><div class="mf" id="b1"></div></div></div>
+        <div class="m"><div class="mt"><span class="mn">M2 DEL-DER</span><span class="mr" id="r2">—</span></div><div class="mb"><div class="mf" id="b2"></div></div></div>
+        <div class="m"><div class="mt"><span class="mn">M3 TRA-IZQ</span><span class="mr" id="r3">—</span></div><div class="mb"><div class="mf" id="b3"></div></div></div>
+        <div class="m"><div class="mt"><span class="mn">M4 TRA-DER</span><span class="mr" id="r4">—</span></div><div class="mb"><div class="mf" id="b4"></div></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// STATE: objeto con todo el estado del dron (posición, velocidad, actitud, motores...)
+const S={armed:1,lat:40.4168,lon:-3.7038,alt:0,vz:0,vx:0,vy:0,hdg:0,pitch:0,roll:0,yawRate:0,thr:0,tgt:0,spd:0,batt:85,sec:0,t:0,motors:[0,0,0,0],trail:[]};
+const K={U:0,D:0,W:0,S:0,A:0,E:0,L:0,R:0}; // pressed keys
+const DT=1/60;
+let trailT=0;
+
+// MAP, con leaflet hecho para verlo como estilo google earth y ver las imágenes satelitales
+const map=L.map('map',{center:[S.lat,S.lon],zoom:17,zoomControl:0,attributionControl:0,keyboard:0,scrollWheelZoom:0,dragging:0});
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19}).addTo(map);
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,opacity:.6}).addTo(map);
+const ico=L.divIcon({html:`<svg width="40" height="40" viewBox="-20 -20 40 40">
+  <line x1="0" y1="0" x2="12" y2="-12" stroke="#1a5090" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="0" y1="0" x2="-12" y2="-12" stroke="#1a5090" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="0" y1="0" x2="12" y2="12" stroke="#1a5090" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="0" y1="0" x2="-12" y2="12" stroke="#1a5090" stroke-width="2.5" stroke-linecap="round"/>
+  <circle cx="12" cy="-12" r="6" fill="rgba(0,200,255,.2)" stroke="#4af" stroke-width="1.5"/>
+  <circle cx="-12" cy="-12" r="6" fill="rgba(0,200,255,.2)" stroke="#4af" stroke-width="1.5"/>
+  <circle cx="12" cy="12" r="6" fill="rgba(0,200,255,.2)" stroke="#4af" stroke-width="1.5"/>
+  <circle cx="-12" cy="12" r="6" fill="rgba(0,200,255,.2)" stroke="#4af" stroke-width="1.5"/>
+  <circle cx="0" cy="0" r="4.5" fill="#080c14" stroke="#4af" stroke-width="1.5"/>
+  <circle cx="0" cy="0" r="1.8" fill="#3d9"/>
+  <line x1="0" y1="-4.5" x2="0" y2="-10" stroke="#fa0" stroke-width="2" stroke-linecap="round"/>
+</svg>`,iconSize:[40,40],iconAnchor:[20,20],className:''});
+const mk=L.marker([S.lat,S.lon],{icon:ico,zIndexOffset:999}).addTo(map);
+const trail=L.polyline([],{color:'#f84',weight:2,opacity:.6}).addTo(map);
+
+// THROTTLE SLIDER
+const tt=document.getElementById('ttrack');
+let td=0;
+function setT(p){S.tgt=Math.max(0,Math.min(1,p));const v=Math.round(S.tgt*100);document.getElementById('tfill').style.height=v+'%';document.getElementById('tknob').style.bottom=`calc(${v}% - 2px)`;document.getElementById('tpct').textContent=v+'%';}
+function tY(y){const r=tt.getBoundingClientRect();setT(1-(y-r.top)/r.height);}
+tt.addEventListener('pointerdown',e=>{td=1;tY(e.clientY);tt.setPointerCapture(e.pointerId);});
+tt.addEventListener('pointermove',e=>{if(td)tY(e.clientY);});
+tt.addEventListener('pointerup',()=>td=0);
+
+// BUTTONS
+const kd=(k)=>{K[k]=1;document.getElementById('k'+k)?.classList.add('lit');};
+const ku=(k)=>{K[k]=0;document.getElementById('k'+k)?.classList.remove('lit');};
+
+// For lateral button, track pointer position to detect left vs right, para el movimiento del dron
+document.getElementById('kL').addEventListener('pointerdown',e=>{
+  const r=e.target.getBoundingClientRect();
+  if(e.clientX<r.left+r.width/2){K.L=1;}else{K.R=1;}
+  e.target.classList.add('lit');
+  e.target.setPointerCapture(e.pointerId);
+});
+document.getElementById('kL').addEventListener('pointerup',e=>{K.L=0;K.R=0;e.target.classList.remove('lit');});
+
+// Funcion para armar y desarmar el dron para que pueda iniciaizar el vuelo
+function arm(){
+  S.armed=!S.armed;
+  const top=document.getElementById('arm-top'),btn=document.getElementById('arm-btn');
+  if(S.armed){top.className='on';top.textContent='✦ ARMADO';btn.className='';btn.textContent='✦ ARMAR / DESARMAR';}
+  else{top.className='off';top.textContent='✕ DESARM';btn.className='off';btn.textContent='✕ ARMAR / DESARMAR';setT(0);}
+}
+
+// Funcion para dibujar el fondo del canvas
+function bz(ctx,cx,cy,r){
+  const g=ctx.createLinearGradient(cx-r,cy-r,cx+r,cy+r);g.addColorStop(0,'#252a35');g.addColorStop(1,'#131820');
+  ctx.beginPath();ctx.arc(cx,cy,r+4,0,7);ctx.fillStyle=g;ctx.fill();
+  ctx.beginPath();ctx.arc(cx,cy,r,0,7);ctx.fillStyle='#050709';ctx.fill();
+}
+function nd(ctx,cx,cy,deg,len,w,c,t=4){
+  ctx.save();ctx.translate(cx,cy);ctx.rotate((deg-90)*Math.PI/180);
+  ctx.beginPath();ctx.moveTo(-w/2,t);ctx.lineTo(0,-len);ctx.lineTo(w/2,t);ctx.fillStyle=c;ctx.fill();ctx.restore();
+}
+function hb(ctx,cx,cy,r){
+  ctx.beginPath();ctx.arc(cx,cy,r,0,7);ctx.fillStyle='#bbb';ctx.fill();
+}
+
+// Funcion para dibujar el horizonte
+function drawH(pitch,roll){
+  const cv=document.getElementById('cH'),ctx=cv.getContext('2d'),cx=49,cy=49,r=44;
+  ctx.clearRect(0,0,98,98);bz(ctx,cx,cy,r);
+  ctx.save();ctx.beginPath();ctx.arc(cx,cy,r,0,7);ctx.clip();
+  ctx.save();ctx.translate(cx,cy);ctx.rotate(roll*Math.PI/180);
+  const pp=pitch*2.2,big=r*3;
+  ctx.fillStyle='#0d5ca8';ctx.fillRect(-big,pp-big,big*2,big);
+  ctx.fillStyle='#6b4200';ctx.fillRect(-big,pp,big*2,big);
+  ctx.beginPath();ctx.moveTo(-big,pp);ctx.lineTo(big,pp);ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.stroke();
+  for(let d=-30;d<=30;d+=10){if(!d)continue;const y=pp-d*2.2,l=18;
+    ctx.beginPath();ctx.moveTo(-l,y);ctx.lineTo(l,y);ctx.strokeStyle='rgba(255,255,255,.5)';ctx.lineWidth=1;ctx.stroke();}
+  ctx.restore();
+  for(const b of[-60,-30,0,30,60]){const a=(b-90)*Math.PI/180;
+    ctx.beginPath();ctx.moveTo(cx+Math.cos(a)*(r-8),cy+Math.sin(a)*(r-8));ctx.lineTo(cx+Math.cos(a)*(r-1),cy+Math.sin(a)*(r-1));
+    ctx.strokeStyle='rgba(255,255,255,.3)';ctx.lineWidth=1;ctx.stroke();}
+  ctx.restore();
+  ctx.save();ctx.translate(cx,cy);ctx.rotate(roll*Math.PI/180);
+  ctx.beginPath();ctx.moveTo(-4,-r);ctx.lineTo(4,-r);ctx.lineTo(0,-r+9);ctx.fillStyle='#fa0';ctx.fill();ctx.restore();
+  ctx.strokeStyle='#fa0';ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(cx-42,cy);ctx.lineTo(cx-12,cy);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(cx-12,cy);ctx.lineTo(cx-12,cy+8);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(cx+12,cy);ctx.lineTo(cx+42,cy);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(cx+12,cy);ctx.lineTo(cx+12,cy+8);ctx.stroke();
+  ctx.beginPath();ctx.arc(cx,cy,3,0,7);ctx.fillStyle='#fa0';ctx.fill();
+}
+
+// Funcion para dibujar el altímetro
+function drawA(alt){
+  const cv=document.getElementById('cA'),ctx=cv.getContext('2d'),cx=49,cy=49,r=44;
+  ctx.clearRect(0,0,98,98);bz(ctx,cx,cy,r);
+  for(let i=0;i<=10;i++){const a=(-135+(i/10)*270)*Math.PI/180,l=i%5===0?8:4;
+    ctx.beginPath();ctx.moveTo(cx+Math.cos(a)*(r-5-l),cy+Math.sin(a)*(r-5-l));ctx.lineTo(cx+Math.cos(a)*(r-5),cy+Math.sin(a)*(r-5));
+    ctx.strokeStyle=i%5===0?'#9ab':'#2a3040';ctx.lineWidth=i%5===0?1.2:.6;ctx.stroke();
+    if(i%5===0){ctx.fillStyle='#9ab';ctx.font='8px monospace';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(i*10,cx+Math.cos(a)*(r-18),cy+Math.sin(a)*(r-18));}}
+  ctx.fillStyle='#334';ctx.font='7px monospace';ctx.textAlign='center';ctx.fillText('×10m',cx,cy+r-16);
+  nd(ctx,cx,cy,-135+((alt%1000)/1000)*270,r-7,2.5,'#cde');
+  hb(ctx,cx,cy,4);
+  ctx.fillStyle='#fa0';ctx.font='bold 10px monospace';ctx.textAlign='center';ctx.fillText(Math.round(alt),cx,cy+r+10);
+}
+
+// Funcion para dibujar el rumbo (brújula giratoria)
+function drawR(hdg){
+  const cv=document.getElementById('cR'),ctx=cv.getContext('2d'),cx=49,cy=49,r=44;
+  ctx.clearRect(0,0,98,98);bz(ctx,cx,cy,r);
+  const C={0:'N',90:'E',180:'S',270:'O'};
+  ctx.save();ctx.translate(cx,cy);ctx.rotate(-hdg*Math.PI/180);
+  for(let i=0;i<36;i++){const a=(i/36)*Math.PI*2-Math.PI/2,d=i*10,maj=i%9===0,l=maj?9:5;
+    ctx.beginPath();ctx.moveTo(Math.cos(a)*(r-4-l),Math.sin(a)*(r-4-l));ctx.lineTo(Math.cos(a)*(r-4),Math.sin(a)*(r-4));
+    ctx.strokeStyle=maj?'#9ab':'#2a3040';ctx.lineWidth=maj?1.2:.6;ctx.stroke();
+    if(maj){const lbl=C[d]||'';ctx.save();ctx.translate(Math.cos(a)*(r-18),Math.sin(a)*(r-18));ctx.rotate(a+Math.PI/2);
+      ctx.fillStyle=C[d]==='N'?'#f77':'#fa0';ctx.font='bold 9px monospace';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(lbl,0,0);ctx.restore();}}
+  ctx.restore();
+  ctx.beginPath();ctx.moveTo(cx,cy-r+3);ctx.lineTo(cx,cy-r+12);ctx.strokeStyle='#fa0';ctx.lineWidth=2.5;ctx.stroke();
+  ctx.fillStyle='#fa0';ctx.font='bold 9px monospace';ctx.textAlign='center';ctx.fillText(String(Math.round(hdg)%360).padStart(3,'0')+'°',cx,cy+r+10);
+}
+
+// Funcion para dibujar el velocímetro
+function drawV(spd){
+  const cv=document.getElementById('cV'),ctx=cv.getContext('2d'),cx=49,cy=49,r=44;
+  ctx.clearRect(0,0,98,98);bz(ctx,cx,cy,r);
+  for(let v=0;v<=20;v+=5){const a=(-135+(v/20)*270)*Math.PI/180,l=9;
+    ctx.beginPath();ctx.moveTo(cx+Math.cos(a)*(r-5-l),cy+Math.sin(a)*(r-5-l));ctx.lineTo(cx+Math.cos(a)*(r-5),cy+Math.sin(a)*(r-5));
+    ctx.strokeStyle='#9ab';ctx.lineWidth=1.2;ctx.stroke();
+    ctx.fillStyle='#9ab';ctx.font='8px monospace';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(v,cx+Math.cos(a)*(r-18),cy+Math.sin(a)*(r-18));}
+  ctx.fillStyle='#334';ctx.font='7px monospace';ctx.textAlign='center';ctx.fillText('m/s',cx,cy+r-16);
+  nd(ctx,cx,cy,-135+(Math.min(spd,20)/20)*270,r-7,2.5,'#cde');hb(ctx,cx,cy,4);
+  ctx.fillStyle='#cde';ctx.font='bold 10px monospace';ctx.textAlign='center';ctx.fillText(spd.toFixed(1),cx,cy+r+10);
+}
+
+// Funcion para dibujar el indicador de velocidad vertical
+function drawS(vz){
+  const cv=document.getElementById('cS'),ctx=cv.getContext('2d'),cx=49,cy=49,r=44;
+  ctx.clearRect(0,0,98,98);bz(ctx,cx,cy,r);
+  for(let v=-5;v<=5;v+=5){const a=(90-v*22)*Math.PI/180,l=9;
+    ctx.beginPath();ctx.moveTo(cx+Math.cos(a)*(r-5-l),cy+Math.sin(a)*(r-5-l));ctx.lineTo(cx+Math.cos(a)*(r-5),cy+Math.sin(a)*(r-5));
+    ctx.strokeStyle='#9ab';ctx.lineWidth=1.2;ctx.stroke();
+    ctx.fillStyle=v>0?'#3d9':v<0?'#f55':'#cde';ctx.font='8px monospace';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(Math.abs(v),cx+Math.cos(a)*(r-18),cy+Math.sin(a)*(r-18));}
+  ctx.fillStyle='#334';ctx.font='7px monospace';ctx.textAlign='center';ctx.fillText('m/s',cx,cy+r-16);
+  nd(ctx,cx,cy,90-Math.max(-5,Math.min(5,vz))*22,r-7,2.5,'#cde');hb(ctx,cx,cy,4);
+  const c=vz>.1?'#3d9':vz<-.1?'#f55':'#9ab';
+  ctx.fillStyle=c;ctx.font='bold 10px monospace';ctx.textAlign='center';ctx.fillText((vz>=0?'+':'')+vz.toFixed(1),cx,cy+r+10);
+}
+
+// Funcion para dibujar el indicador de inclinación
+function drawT(roll){
+  const cv=document.getElementById('cT'),ctx=cv.getContext('2d'),cx=49,cy=44,r=40;
+  ctx.clearRect(0,0,98,98);bz(ctx,cx,cy+4,r+4);
+  ctx.save();ctx.translate(cx,cy);ctx.rotate(roll*Math.PI/180);
+  ctx.strokeStyle='#cde';ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(0,-12);ctx.lineTo(0,12);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(-r+8,3);ctx.lineTo(-10,3);ctx.lineTo(0,-4);ctx.lineTo(10,3);ctx.lineTo(r-8,3);ctx.stroke();
+  ctx.restore();
+  ctx.beginPath();ctx.moveTo(cx-r+4,cy);ctx.lineTo(cx-r+12,cy);ctx.strokeStyle='#fa0';ctx.lineWidth=1.5;ctx.stroke();
+  ctx.beginPath();ctx.moveTo(cx+r-4,cy);ctx.lineTo(cx+r-12,cy);ctx.stroke();
+  const bX=cx+Math.max(-20,Math.min(20,S.yawRate*.1));
+  ctx.fillStyle='#0a0c10';ctx.fillRect(cx-22,88,44,12);
+  ctx.beginPath();ctx.arc(bX,94,5,0,7);ctx.fillStyle='#aab';ctx.fill();
+}
+
+// Funcion para actualizar el estado del dron cuando hace una maniobra
+function tick(){
+  if(!S.armed){
+    S.vx*=.93;S.vy*=.93;S.pitch*=.88;S.roll*=.88;
+    if(S.alt>0){S.vz=Math.max(-5,S.vz-5*DT);S.alt=Math.max(0,S.alt+S.vz*DT);}else S.vz=0;
+    S.motors=S.motors.map(m=>Math.max(0,m-5*DT));S.spd=Math.hypot(S.vx,S.vy);return;
+  }
+
+  // Throttle
+  if(K.U)setT(S.tgt+.009);
+  if(K.D)setT(S.tgt-.009);
+  S.thr+=(S.tgt-S.thr)*DT*9;
+
+  // Física vertical: empuje = thr*2*g, gravedad = g
+  // Cuando thr=0.5 → empuje = g → equilibrio → hover estable
+  // Cuando thr>0.5 → empuje > g → el dron sube
+  // Cuando thr<0.5 → empuje < g → el dron baja
+  S.vz+=(S.thr*2*9.81-9.81)*DT;S.vz*=.982;
+  S.alt=Math.max(0,S.alt+S.vz*DT);if(S.alt===0&&S.vz<0)S.vz=0;
+
+  S.yawRate=(K.A?-80:K.E?80:0);
+  S.hdg=((S.hdg+S.yawRate*DT)%360+360)%360;
+
+  S.pitch+=(((K.W?1:K.S?-1:0)*22)-S.pitch)*DT*6;
+  S.roll+=(((K.L?-1:K.R?1:0)*26)-S.roll)*DT*6;
+  if(!K.W&&!K.S)S.pitch*=1-4*DT;
+  if(!K.L&&!K.R)S.roll*=1-4*DT;
+
+  // Horizontal movement — relative to heading
+  if(S.alt>.05){
+    const h=S.hdg*Math.PI/180;
+    const fwd=(K.W?1:K.S?-1:0)*28;   // m/s² forward
+    const lat=(K.L?-1:K.R?1:0)*22;   // m/s² lateral
+    S.vx+=(Math.sin(h)*fwd+Math.cos(h)*lat)*DT;
+    S.vy+=(Math.cos(h)*fwd-Math.sin(h)*lat)*DT;
+  }
+  const drag=(!K.W&&!K.S&&!K.L&&!K.R)?.955:.976;
+  S.vx*=drag;S.vy*=drag;
+  S.spd=Math.hypot(S.vx,S.vy);
+
+  // Position update — convert m/s to lat/lon changes
+  const mL=111320,mO=111320*Math.cos(S.lat*Math.PI/180);
+  S.lat+=S.vy*DT/mL;S.lon+=S.vx*DT/mO;
+
+  // Motor Mixing: cada motor recibe una mezcla diferente de
+  // throttle (b) + roll (ro) + pitch (pi) + yaw (ya).
+  // Así el flight controller controla los 4 ejes con solo 4 motores:
+  //   M1 del-izq: menos roll, más pitch, más yaw
+  //   M2 del-der: más roll, más pitch, menos yaw
+  //   M3 tra-izq: menos roll, menos pitch, menos yaw
+  //   M4 tra-der: más roll, menos pitch, más yaw
+  const b=S.thr*100,ro=(K.L?-1:K.R?1:0)*14,pi=(K.W?1:K.S?-1:0)*14,ya=(K.A?-1:K.E?1:0)*9;
+  S.motors[0]=Math.max(0,Math.min(100,b-ro+pi+ya));
+  S.motors[1]=Math.max(0,Math.min(100,b+ro+pi-ya));
+  S.motors[2]=Math.max(0,Math.min(100,b-ro-pi-ya));
+  S.motors[3]=Math.max(0,Math.min(100,b+ro-pi+ya));
+
+  S.batt=Math.max(0,S.batt-S.motors.reduce((a,b)=>a+b,0)*.000006);
+  if(S.alt>.1)S.sec+=DT;S.t+=DT;
+  trailT+=DT;if(trailT>.3){trailT=0;S.trail.push([S.lat,S.lon]);if(S.trail.length>300)S.trail.shift();trail.setLatLngs(S.trail);}
+}
+
+// Funcion para actualizar la interfaz de usuario
+function ui(){
+  drawH(S.pitch,S.roll);drawA(S.alt);drawR(S.hdg);drawV(S.spd);drawS(S.vz);drawT(S.roll);
+
+  mk.setLatLng([S.lat,S.lon]);
+  const el=mk.getElement();if(el){const b=el.style.transform.replace(/rotate\([^)]*\)/g,'');el.style.transform=b+` rotate(${S.hdg}deg)`;}
+  map.panTo([S.lat,S.lon],{animate:true,duration:.1});
+
+  document.getElementById('b-alt').textContent=Math.round(S.alt)+'m';
+  document.getElementById('b-spd').textContent=S.spd.toFixed(1);
+  document.getElementById('b-hdg').textContent=String(Math.round(S.hdg)%360).padStart(3,'0')+'°';
+  const f=Math.floor(S.sec);document.getElementById('b-time').textContent=String(Math.floor(f/60)).padStart(2,'0')+':'+String(f%60).padStart(2,'0');
+
+  for(let i=0;i<4;i++){
+    const p=S.motors[i],r=Math.round(p*80+(p>5?400:0));
+    document.getElementById('r'+(i+1)).textContent=r>0?r+'rpm':'—';
+    document.getElementById('b'+(i+1)).style.width=p+'%';
+  }
+}
+
+function loop(){tick();ui();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>
