@@ -1,0 +1,1235 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SWARM // Attack Planner</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --green: #00ff88;
+            --green-dim: #00aa55;
+            --green-dark: #003322;
+            --red: #ff3333;
+            --amber: #ffaa00;
+            --bg: #050a07;
+            --panel: #080f0a;
+            --border: #1a3a25;
+            --text: #b0d4b8;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Share Tech Mono', monospace;
+            background: var(--bg);
+            color: var(--text);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--panel);
+            border-bottom: 1px solid var(--border);
+            padding: 0 20px;
+            height: 44px;
+            flex-shrink: 0;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #header::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--green), transparent);
+            animation: scanH 4s linear infinite;
+        }
+
+        @keyframes scanH {
+            0% {
+                transform: translateX(-100%)
+            }
+
+            100% {
+                transform: translateX(100%)
+            }
+        }
+
+        .logo {
+            font-family: 'Orbitron', monospace;
+            font-size: 18px;
+            font-weight: 900;
+            color: var(--green);
+            letter-spacing: 4px;
+        }
+
+        .logo span {
+            color: var(--red);
+        }
+
+        #clock {
+            font-size: 12px;
+            color: var(--green-dim);
+            letter-spacing: 2px;
+        }
+
+        #status-bar {
+            font-size: 11px;
+            color: var(--amber);
+            letter-spacing: 1px;
+        }
+
+        #main {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        #sidebar {
+            width: 280px;
+            background: var(--panel);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+
+        .panel-section {
+            border-bottom: 1px solid var(--border);
+            padding: 10px 12px;
+        }
+
+        .section-title {
+            font-family: 'Orbitron', monospace;
+            font-size: 9px;
+            letter-spacing: 3px;
+            color: var(--green-dim);
+            text-transform: uppercase;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .section-title::before {
+            content: '';
+            display: inline-block;
+            width: 7px;
+            height: 7px;
+            border: 1px solid var(--green-dim);
+            transform: rotate(45deg);
+        }
+
+        .btn-tac {
+            width: 100%;
+            padding: 7px 10px;
+            margin-bottom: 5px;
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text);
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 11px;
+            cursor: pointer;
+            text-align: left;
+            letter-spacing: 1px;
+            transition: all 0.15s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-tac:hover {
+            border-color: var(--green);
+            color: var(--green);
+            background: var(--green-dark);
+        }
+
+        .btn-tac.active {
+            border-color: var(--green);
+            color: var(--green);
+            background: var(--green-dark);
+            box-shadow: 0 0 8px rgba(0, 255, 136, 0.2);
+        }
+
+        .btn-tac .dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--green-dim);
+            flex-shrink: 0;
+        }
+
+        .btn-tac.active .dot {
+            background: var(--green);
+            box-shadow: 0 0 4px var(--green);
+            animation: blink 1s steps(1) infinite;
+        }
+
+        @keyframes blink {
+            50% {
+                opacity: 0
+            }
+        }
+
+        .btn-tac .badge {
+            margin-left: auto;
+            font-size: 10px;
+            color: var(--green);
+        }
+
+        .param-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 6px;
+            gap: 6px;
+        }
+
+        .param-row label {
+            font-size: 10px;
+            color: var(--green-dim);
+            letter-spacing: 1px;
+            flex: 1;
+        }
+
+        .param-row input,
+        .param-row select {
+            width: 85px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            color: var(--green);
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 11px;
+            padding: 3px 6px;
+            text-align: right;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .param-row input:focus,
+        .param-row select:focus {
+            border-color: var(--green);
+        }
+
+        .btn-action {
+            width: 100%;
+            padding: 9px;
+            margin-bottom: 5px;
+            border: none;
+            font-family: 'Orbitron', monospace;
+            font-size: 10px;
+            letter-spacing: 2px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-transform: uppercase;
+        }
+
+        #btnCalc {
+            background: var(--green);
+            color: var(--bg);
+            font-weight: 700;
+        }
+
+        #btnCalc:hover {
+            background: #00ffaa;
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.4);
+        }
+
+        #btnSimular {
+            background: transparent;
+            border: 1px solid var(--green);
+            color: var(--green);
+        }
+
+        #btnSimular:hover {
+            background: var(--green-dark);
+        }
+
+        #btnSimular:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        #btnStop {
+            background: transparent;
+            border: 1px solid var(--red);
+            color: var(--red);
+            display: none;
+        }
+
+        #btnStop:hover {
+            background: rgba(255, 50, 50, 0.1);
+        }
+
+        #btnExport {
+            background: transparent;
+            border: 1px solid var(--amber);
+            color: var(--amber);
+        }
+
+        #btnExport:hover {
+            background: rgba(255, 170, 0, 0.1);
+        }
+
+        #btnClear {
+            background: transparent;
+            border: 1px solid #444;
+            color: #777;
+        }
+
+        #btnClear:hover {
+            background: rgba(255, 50, 50, 0.07);
+            border-color: var(--red);
+            color: var(--red);
+        }
+
+        .slider-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 2px;
+        }
+
+        .slider-row label {
+            font-size: 10px;
+            color: var(--green-dim);
+            white-space: nowrap;
+        }
+
+        #speedSlider {
+            -webkit-appearance: none;
+            flex: 1;
+            height: 3px;
+            background: var(--border);
+            outline: none;
+            border-radius: 2px;
+        }
+
+        #speedSlider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--green);
+            cursor: pointer;
+            border: 2px solid var(--bg);
+            box-shadow: 0 0 6px var(--green);
+        }
+
+        #speedVal {
+            font-size: 11px;
+            color: var(--green);
+            width: 36px;
+            text-align: right;
+        }
+
+        #map-wrap {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+
+        #map-wrap::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0, 255, 136, 0.012) 2px, rgba(0, 255, 136, 0.012) 4px);
+            pointer-events: none;
+            z-index: 999;
+        }
+
+        .corner {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            z-index: 1000;
+            pointer-events: none;
+        }
+
+        .corner.tl {
+            top: 8px;
+            left: 8px;
+            border-top: 2px solid var(--green);
+            border-left: 2px solid var(--green);
+        }
+
+        .corner.tr {
+            top: 8px;
+            right: 8px;
+            border-top: 2px solid var(--green);
+            border-right: 2px solid var(--green);
+        }
+
+        .corner.bl {
+            bottom: 8px;
+            left: 8px;
+            border-bottom: 2px solid var(--green);
+            border-left: 2px solid var(--green);
+        }
+
+        .corner.br {
+            bottom: 8px;
+            right: 8px;
+            border-bottom: 2px solid var(--green);
+            border-right: 2px solid var(--green);
+        }
+
+        #mode-label {
+            position: absolute;
+            top: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-family: 'Orbitron', monospace;
+            font-size: 11px;
+            letter-spacing: 3px;
+            color: var(--amber);
+            z-index: 1000;
+            background: rgba(5, 10, 7, 0.92);
+            padding: 4px 14px;
+            border: 1px solid var(--amber);
+            display: none;
+        }
+
+        #sim-hud {
+            position: absolute;
+            bottom: 16px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            background: rgba(5, 10, 7, 0.93);
+            border: 1px solid var(--green);
+            padding: 6px 22px;
+            font-family: 'Orbitron', monospace;
+            font-size: 12px;
+            color: var(--green);
+            letter-spacing: 3px;
+            display: none;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+
+        #rightpanel {
+            width: 290px;
+            background: var(--panel);
+            border-left: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+        }
+
+        .rp-header {
+            font-family: 'Orbitron', monospace;
+            font-size: 9px;
+            letter-spacing: 3px;
+            color: var(--green-dim);
+            padding: 10px 12px 7px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        #drone-table-wrap {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px;
+        }
+
+        .drone-card {
+            border: 1px solid var(--border);
+            margin-bottom: 6px;
+            padding: 8px;
+            background: var(--bg);
+            transition: border-color 0.3s, box-shadow 0.3s;
+        }
+
+        .drone-card.active-fly {
+            border-color: var(--green);
+            box-shadow: 0 0 8px rgba(0, 255, 136, 0.12);
+        }
+
+        .drone-card.hit {
+            border-color: var(--red);
+            box-shadow: 0 0 12px rgba(255, 50, 50, 0.25);
+        }
+
+        .dc-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 6px;
+        }
+
+        .dc-id {
+            font-family: 'Orbitron', monospace;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .dc-status {
+            font-size: 9px;
+            letter-spacing: 2px;
+            padding: 2px 5px;
+            border: 1px solid;
+            text-transform: uppercase;
+        }
+
+        .dc-status.ready {
+            color: var(--green);
+            border-color: var(--green);
+        }
+
+        .dc-status.flying {
+            color: #00ccff;
+            border-color: #00ccff;
+            animation: blink 0.8s steps(1) infinite;
+        }
+
+        .dc-status.impact {
+            color: var(--red);
+            border-color: var(--red);
+        }
+
+        .dc-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 9px;
+            margin-bottom: 2px;
+            color: #4a6a52;
+        }
+
+        .dc-row .dv {
+            color: var(--text);
+        }
+
+        .dc-row .dv.live {
+            color: var(--green);
+        }
+
+        .dc-progress {
+            margin-top: 5px;
+            height: 3px;
+            background: var(--border);
+            position: relative;
+        }
+
+        .dc-progress-fill {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            transition: width 0.08s linear;
+            width: 0%;
+        }
+
+        .dc-angle {
+            margin-top: 5px;
+            font-size: 9px;
+            color: var(--green-dim);
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .dc-angle-bar {
+            flex: 1;
+            height: 2px;
+            background: var(--border);
+            position: relative;
+        }
+
+        .dc-angle-bar-fill {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+        }
+
+        #empty-state {
+            text-align: center;
+            color: #2a4a32;
+            font-size: 10px;
+            letter-spacing: 2px;
+            padding: 30px 15px;
+            line-height: 2.4;
+        }
+
+        #log-panel {
+            border-top: 1px solid var(--border);
+            padding: 6px 10px;
+            height: 88px;
+            overflow-y: auto;
+            font-size: 9px;
+            line-height: 1.7;
+            flex-shrink: 0;
+        }
+
+        .log-line {
+            color: var(--green-dim);
+        }
+
+        .log-line.warn {
+            color: var(--amber);
+        }
+
+        .log-line.err {
+            color: var(--red);
+        }
+
+        .log-line span {
+            color: #2a4a32;
+            margin-right: 6px;
+        }
+
+        .leaflet-tile {
+            filter: invert(1) hue-rotate(140deg) saturate(0.7) brightness(0.55);
+        }
+
+        .leaflet-container {
+            background: #020804;
+        }
+
+        .leaflet-control-attribution {
+            display: none;
+        }
+
+        .leaflet-popup-content-wrapper {
+            background: var(--panel);
+            border: 1px solid var(--green);
+            border-radius: 0;
+            color: var(--green);
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 11px;
+            box-shadow: 0 0 12px rgba(0, 255, 136, 0.3);
+        }
+
+        .leaflet-popup-tip {
+            background: var(--green);
+        }
+
+        ::-webkit-scrollbar {
+            width: 3px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border);
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--green-dim);
+        }
+    </style>
+</head>
+
+<body>
+    <div id="header">
+        <div class="logo">SWARM <span>//</span> ATTACK PLANNER</div>
+        <div id="status-bar">● SYSTEM READY</div>
+        <div id="clock">--:--:-- UTC</div>
+    </div>
+    <div id="main">
+        <div id="sidebar">
+            <div class="panel-section">
+                <div class="section-title">Puntos de Misión</div>
+                <button class="btn-tac" id="btnTakeoff" onclick="activar('takeoff')">
+                    <div class="dot"></div>TAKEOFF POINT<span class="badge" id="st-takeoff"></span>
+                </button>
+                <button class="btn-tac" id="btnTarget" onclick="activar('target')">
+                    <div class="dot"></div>OBJETIVO<span class="badge" id="st-target"></span>
+                </button>
+                <button class="btn-tac" id="btnHolding" onclick="activar('holding')">
+                    <div class="dot"></div>PUNTO DE ESPERA<span class="badge" id="st-holding"></span>
+                </button>
+            </div>
+            <div class="panel-section">
+                <div class="section-title">Parámetros de Enjambre</div>
+                <div class="param-row"><label>N.º Drones</label><input type="number" id="numDrones" value="9" min="3"
+                        max="12"></div>
+                <div class="param-row"><label>Velocidad (m/s)</label><input type="number" id="speed" value="15" min="1"
+                        max="100"></div>
+                <div class="param-row"><label>Radio Formación (m)</label><input type="number" id="radius" value="300"
+                        min="50"></div>
+                <div class="param-row"><label>Radio de Giro (m)</label><input type="number" id="turnRadius" value="80"
+                        min="20"></div>
+                <div class="param-row"><label>Altitud (m)</label><input type="number" id="altitude" value="120"
+                        min="10"></div>
+                <div class="param-row"><label>Patrón de Ataque</label>
+                    <select id="pattern">
+                        <option value="radial">Radial</option>
+                        <option value="spiral">Espiral</option>
+                        <option value="pincer">Tenaza</option>
+                    </select>
+                </div>
+            </div>
+            <div class="panel-section">
+                <div class="section-title">Velocidad Simulación</div>
+                <div class="slider-row">
+                    <label>FACTOR</label>
+                    <input type="range" id="speedSlider" min="0.5" max="15" step="0.5" value="3">
+                    <span id="speedVal">3×</span>
+                </div>
+            </div>
+            <div class="panel-section">
+                <div class="section-title">Acciones</div>
+                <button class="btn-action" id="btnCalc" onclick="calcularMision()">▶ CALCULAR RUTAS</button>
+                <button class="btn-action" id="btnSimular" onclick="iniciarSimulacion()" disabled>⬡ LANZAR
+                    SIMULACIÓN</button>
+                <button class="btn-action" id="btnStop" onclick="detenerSimulacion()">■ DETENER</button>
+                <button class="btn-action" id="btnExport" onclick="exportarWaypoints()">⬇ EXPORTAR .TXT</button>
+                <button class="btn-action" id="btnClear" onclick="limpiarMision()">✕ LIMPIAR MISIÓN</button>
+            </div>
+        </div>
+
+        <div id="map-wrap">
+            <div class="corner tl"></div>
+            <div class="corner tr"></div>
+            <div class="corner bl"></div>
+            <div class="corner br"></div>
+            <div id="mode-label">CLICK EN MAPA</div>
+            <div id="map"></div>
+            <div id="sim-hud">T+ 00:00 | DRONES EN VUELO: 0</div>
+        </div>
+
+        <div id="rightpanel">
+            <div class="rp-header">▸ TELEMETRÍA EN TIEMPO REAL</div>
+            <div id="drone-table-wrap">
+                <div id="empty-state">SIN DATOS<br>Define puntos<br>y calcula rutas</div>
+                <div id="drone-cards"></div>
+            </div>
+            <div id="log-panel"></div>
+        </div>
+    </div>
+
+    <script>
+        // ═══════════════════════════════════════
+        // MAPA INIT
+        // ═══════════════════════════════════════
+        var map = L.map('map', { zoomControl: true }).setView([40.416775, -3.703790], 14);
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+
+        var pathLayer = L.layerGroup().addTo(map);
+        var droneLayer = L.layerGroup().addTo(map);
+        var effectLayer = L.layerGroup().addTo(map);
+
+        var puntos = { takeoff: null, target: null, holding: null };
+        var marcadores = { takeoff: null, target: null, holding: null };
+        var modoSeleccion = null;
+        var waypointData = [];
+        var simRunning = false;
+        var simRAF = null;
+        var simStartTime = null;
+        var droneStates = [];
+
+        var COLORS = ['#00ff88', '#00ccff', '#ffaa00', '#ff4488', '#aa88ff',
+            '#ff6600', '#44ffcc', '#ffff00', '#ff2222', '#88ff44', '#cc44ff', '#00ffff'];
+
+        // ─── Clock ────────────────────────────
+        setInterval(() => {
+            document.getElementById('clock').textContent = new Date().toISOString().slice(11, 19) + ' UTC';
+        }, 1000);
+        document.getElementById('speedSlider').addEventListener('input', function () {
+            document.getElementById('speedVal').textContent = this.value + '×';
+        });
+
+        // ─── Log ──────────────────────────────
+        function log(msg, type) {
+            var el = document.getElementById('log-panel');
+            var d = document.createElement('div');
+            d.className = 'log-line' + (type ? ' ' + type : '');
+            d.innerHTML = '<span>' + new Date().toISOString().slice(11, 19) + '</span>' + msg;
+            el.appendChild(d); el.scrollTop = el.scrollHeight;
+        }
+
+        // ─── SVG Icons ────────────────────────
+        function makeSVGIcon(color, shape, heading) {
+            heading = heading || 0;
+            var s;
+            if (shape === 'takeoff') {
+                s = `<svg xmlns='http://www.w3.org/2000/svg' width='26' height='34' viewBox='0 0 26 34'><polygon points='13,2 24,32 13,25 2,32' fill='${color}' stroke='#000' stroke-width='1.5'/></svg>`;
+                return L.icon({ iconUrl: svgUrl(s), iconSize: [26, 34], iconAnchor: [13, 17] });
+            }
+            if (shape === 'target') {
+                s = `<svg xmlns='http://www.w3.org/2000/svg' width='36' height='36' viewBox='0 0 36 36'><circle cx='18' cy='18' r='16' fill='none' stroke='${color}' stroke-width='2'/><circle cx='18' cy='18' r='9' fill='none' stroke='${color}' stroke-width='1.5'/><circle cx='18' cy='18' r='3.5' fill='${color}'/><line x1='18' y1='2' x2='18' y2='10' stroke='${color}' stroke-width='1.5'/><line x1='18' y1='26' x2='18' y2='34' stroke='${color}' stroke-width='1.5'/><line x1='2' y1='18' x2='10' y2='18' stroke='${color}' stroke-width='1.5'/><line x1='26' y1='18' x2='34' y2='18' stroke='${color}' stroke-width='1.5'/></svg>`;
+                return L.icon({ iconUrl: svgUrl(s), iconSize: [36, 36], iconAnchor: [18, 18] });
+            }
+            if (shape === 'holding') {
+                s = `<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26'><rect x='2' y='2' width='22' height='22' fill='none' stroke='${color}' stroke-width='2' transform='rotate(45,13,13)'/><rect x='8' y='8' width='10' height='10' fill='${color}' transform='rotate(45,13,13)'/></svg>`;
+                return L.icon({ iconUrl: svgUrl(s), iconSize: [26, 26], iconAnchor: [13, 13] });
+            }
+            // drone — top-down quadcopter view
+            s = `<svg xmlns='http://www.w3.org/2000/svg' width='36' height='36' viewBox='0 0 36 36'>
+    <g transform='rotate(${heading},18,18)'>
+      <!-- forward indicator tick -->
+      <line x1='18' y1='2' x2='18' y2='7' stroke='${color}' stroke-width='1.5' opacity='0.9'/>
+
+      <!-- 4 arms -->
+      <line x1='18' y1='18' x2='6'  y2='6'  stroke='${color}' stroke-width='2'   opacity='0.85'/>
+      <line x1='18' y1='18' x2='30' y2='6'  stroke='${color}' stroke-width='2'   opacity='0.85'/>
+      <line x1='18' y1='18' x2='6'  y2='30' stroke='${color}' stroke-width='2'   opacity='0.85'/>
+      <line x1='18' y1='18' x2='30' y2='30' stroke='${color}' stroke-width='2'   opacity='0.85'/>
+
+      <!-- 4 rotors (circles at arm tips) -->
+      <circle cx='6'  cy='6'  r='5' fill='none' stroke='${color}' stroke-width='1.5' opacity='0.9'/>
+      <circle cx='30' cy='6'  r='5' fill='none' stroke='${color}' stroke-width='1.5' opacity='0.9'/>
+      <circle cx='6'  cy='30' r='5' fill='none' stroke='${color}' stroke-width='1.5' opacity='0.9'/>
+      <circle cx='30' cy='30' r='5' fill='none' stroke='${color}' stroke-width='1.5' opacity='0.9'/>
+
+      <!-- rotor spin blades (short cross inside each rotor) -->
+      <line x1='3'  y1='6'  x2='9'  y2='6'  stroke='${color}' stroke-width='1' opacity='0.6'/>
+      <line x1='6'  y1='3'  x2='6'  y2='9'  stroke='${color}' stroke-width='1' opacity='0.6'/>
+      <line x1='27' y1='6'  x2='33' y2='6'  stroke='${color}' stroke-width='1' opacity='0.6'/>
+      <line x1='30' y1='3'  x2='30' y2='9'  stroke='${color}' stroke-width='1' opacity='0.6'/>
+      <line x1='3'  y1='30' x2='9'  y2='30' stroke='${color}' stroke-width='1' opacity='0.6'/>
+      <line x1='6'  y1='27' x2='6'  y2='33' stroke='${color}' stroke-width='1' opacity='0.6'/>
+      <line x1='27' y1='30' x2='33' y2='30' stroke='${color}' stroke-width='1' opacity='0.6'/>
+      <line x1='30' y1='27' x2='30' y2='33' stroke='${color}' stroke-width='1' opacity='0.6'/>
+
+      <!-- central body -->
+      <rect x='14' y='14' width='8' height='8' rx='1.5' fill='${color}' opacity='0.95'/>
+      <!-- body cross detail -->
+      <line x1='18' y1='14' x2='18' y2='22' stroke='rgba(0,0,0,0.45)' stroke-width='1'/>
+      <line x1='14' y1='18' x2='22' y2='18' stroke='rgba(0,0,0,0.45)' stroke-width='1'/>
+      <!-- center dot (camera/sensor) -->
+      <circle cx='18' cy='18' r='2' fill='rgba(0,0,0,0.7)'/>
+      <circle cx='18' cy='18' r='0.8' fill='${color}' opacity='0.5'/>
+
+      <!-- glow shadow under body -->
+      <rect x='14' y='14' width='8' height='8' rx='1.5' fill='none' stroke='rgba(0,0,0,0.5)' stroke-width='3' opacity='0.3'/>
+    </g>
+  </svg>`;
+            return L.icon({ iconUrl: svgUrl(s), iconSize: [36, 36], iconAnchor: [18, 18] });
+        }
+        function svgUrl(s) { return URL.createObjectURL(new Blob([s], { type: 'image/svg+xml' })); }
+
+        // ─── Selección ────────────────────────
+        var labelEl = document.getElementById('mode-label');
+        function activar(tipo) {
+            modoSeleccion = tipo;
+            document.querySelectorAll('.btn-tac').forEach(b => b.classList.remove('active'));
+            var ids = { takeoff: 'btnTakeoff', target: 'btnTarget', holding: 'btnHolding' };
+            document.getElementById(ids[tipo]).classList.add('active');
+            labelEl.style.display = 'block';
+            labelEl.textContent = 'CLICK EN MAPA → ' + tipo.toUpperCase();
+            map.getContainer().style.cursor = 'crosshair';
+        }
+        map.on('click', function (e) {
+            if (!modoSeleccion) return;
+            puntos[modoSeleccion] = e.latlng;
+            if (marcadores[modoSeleccion]) map.removeLayer(marcadores[modoSeleccion]);
+            var col = { takeoff: '#00ff88', target: '#ff3333', holding: '#ffaa00' }[modoSeleccion];
+            marcadores[modoSeleccion] = L.marker(e.latlng, { icon: makeSVGIcon(col, modoSeleccion) }).addTo(map);
+            document.getElementById('st-' + modoSeleccion).textContent = '✔';
+            log('Punto ' + modoSeleccion.toUpperCase() + ' → ' + e.latlng.lat.toFixed(5) + ', ' + e.latlng.lng.toFixed(5));
+            modoSeleccion = null;
+            document.querySelectorAll('.btn-tac').forEach(b => b.classList.remove('active'));
+            labelEl.style.display = 'none';
+            map.getContainer().style.cursor = '';
+        });
+
+        // ═══════════════════════════════════════
+        // GEO UTILS
+        // ═══════════════════════════════════════
+        function haversine(la1, lo1, la2, lo2) {
+            var R = 6371000, dL = (la2 - la1) * Math.PI / 180, dl = (lo2 - lo1) * Math.PI / 180;
+            var a = Math.sin(dL / 2) ** 2 + Math.cos(la1 * Math.PI / 180) * Math.cos(la2 * Math.PI / 180) * Math.sin(dl / 2) ** 2;
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        }
+        function bearing(la1, lo1, la2, lo2) {
+            var dL = (lo2 - lo1) * Math.PI / 180;
+            var y = Math.sin(dL) * Math.cos(la2 * Math.PI / 180);
+            var x = Math.cos(la1 * Math.PI / 180) * Math.sin(la2 * Math.PI / 180) - Math.sin(la1 * Math.PI / 180) * Math.cos(la2 * Math.PI / 180) * Math.cos(dL);
+            return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+        }
+        function offsetLL(lat, lng, dist, brng) {
+            var R = 6371000, b = brng * Math.PI / 180, la = lat * Math.PI / 180, lo = lng * Math.PI / 180;
+            var la2 = Math.asin(Math.sin(la) * Math.cos(dist / R) + Math.cos(la) * Math.sin(dist / R) * Math.cos(b));
+            var lo2 = lo + Math.atan2(Math.sin(b) * Math.sin(dist / R) * Math.cos(la), Math.cos(dist / R) - Math.sin(la) * Math.sin(la2));
+            return [la2 * 180 / Math.PI, lo2 * 180 / Math.PI];
+        }
+
+        // Quadratic Bézier — p0,p1 (control),p2 as [lat,lng] arrays
+        function bezier(p0, cp, p2, steps) {
+            var pts = [];
+            for (var i = 0; i <= steps; i++) {
+                var t = i / steps;
+                pts.push([(1 - t) * (1 - t) * p0[0] + 2 * (1 - t) * t * cp[0] + t * t * p2[0],
+                (1 - t) * (1 - t) * p0[1] + 2 * (1 - t) * t * cp[1] + t * t * p2[1]]);
+            }
+            return pts;
+        }
+        function cpPerp(a, b, f) {
+            var mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+            return [mid[0] - (b[1] - a[1]) * f, mid[1] + (b[0] - a[0]) * f];
+        }
+
+        // Build full path array for one drone
+        function buildPath(tk, holdPt, staging, tgt, arcF) {
+            var pts = [];
+            var STEPS = 40;
+            if (holdPt) {
+                pts = pts.concat(bezier(tk, cpPerp(tk, holdPt, arcF * 0.7), holdPt, STEPS));
+                pts = pts.concat(bezier(holdPt, cpPerp(holdPt, staging, arcF * 0.5), staging, STEPS).slice(1));
+            } else {
+                pts = pts.concat(bezier(tk, cpPerp(tk, staging, arcF), staging, STEPS));
+            }
+            // Final attack arc — tighter curve
+            pts = pts.concat(bezier(staging, cpPerp(staging, tgt, arcF * 0.9), tgt, 30).slice(1));
+            return pts;
+        }
+
+        // Cumulative arc-length along path
+        function cumDist(pts) {
+            var d = [0];
+            for (var i = 1; i < pts.length; i++) d.push(d[i - 1] + haversine(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1]));
+            return d;
+        }
+
+        // Binary-search interpolation on path
+        function interpPath(pts, cd, dist) {
+            if (dist <= 0) return pts[0];
+            var total = cd[cd.length - 1];
+            if (dist >= total) return pts[pts.length - 1];
+            var lo = 0, hi = cd.length - 1;
+            while (lo < hi - 1) { var m = (lo + hi) >> 1; if (cd[m] <= dist) lo = m; else hi = m; }
+            var t = (dist - cd[lo]) / (cd[hi] - cd[lo]);
+            return [pts[lo][0] + (pts[hi][0] - pts[lo][0]) * t, pts[lo][1] + (pts[hi][1] - pts[lo][1]) * t];
+        }
+
+        // Easing for speed ramp
+        function easeInQuad(t) { return t * t; }
+
+        // ═══════════════════════════════════════
+        // CALCULAR MISIÓN
+        // ═══════════════════════════════════════
+        function calcularMision() {
+            if (!puntos.takeoff || !puntos.target) { log('ERROR: Define Takeoff y Objetivo', 'err'); return; }
+            detenerSimulacion();
+            pathLayer.clearLayers(); droneLayer.clearLayers(); effectLayer.clearLayers();
+            waypointData = []; droneStates = [];
+
+            var n = parseInt(document.getElementById('numDrones').value);
+            var speed = parseFloat(document.getElementById('speed').value);
+            var radius = parseFloat(document.getElementById('radius').value);
+            var altitude = parseFloat(document.getElementById('altitude').value);
+            var pattern = document.getElementById('pattern').value;
+
+            var tk = [puntos.takeoff.lat, puntos.takeoff.lng];
+            var tgt = [puntos.target.lat, puntos.target.lng];
+            var hld = puntos.holding ? [puntos.holding.lat, puntos.holding.lng] : null;
+
+            // Re-add fixed markers
+            Object.keys(marcadores).forEach(k => { if (marcadores[k]) marcadores[k].addTo(map); });
+
+            // Target rings
+            L.circle(tgt, { radius: radius, color: '#ff3333', weight: 1, fillOpacity: 0.04, dashArray: '5,5' }).addTo(pathLayer);
+            L.circle(tgt, { radius: radius * 0.2, color: '#ff3333', weight: 0.8, fillOpacity: 0.08 }).addTo(pathLayer);
+
+            var cards = document.getElementById('drone-cards');
+            cards.innerHTML = '';
+            document.getElementById('empty-state').style.display = 'none';
+
+            for (var i = 0; i < n; i++) {
+                var color = COLORS[i % COLORS.length];
+
+                // Attack angle per pattern
+                var angleDeg;
+                if (pattern === 'radial') angleDeg = (360 / n) * i;
+                else if (pattern === 'spiral') angleDeg = ((360 / n) * i + i * 18) % 360;
+                else {  // pincer
+                    var half = Math.ceil(n / 2);
+                    angleDeg = i < half
+                        ? 20 + (140 / (half - 1 || 1)) * i
+                        : 200 + (140 / (Math.floor(n / 2) - 1 || 1)) * (i - half);
+                }
+
+                var staging = offsetLL(tgt[0], tgt[1], radius, angleDeg);
+                var holdPos = hld ? offsetLL(hld[0], hld[1], 100 + i * 20, (360 / n) * i) : null;
+
+                // Arc factor: alternating sign, growing slightly with index
+                var arcF = 0.18 * (i % 2 === 0 ? 1 : -1) * (1 + i * 0.04);
+
+                var pts = buildPath(tk, holdPos, staging, tgt, arcF);
+                var cd = cumDist(pts);
+                var totD = cd[cd.length - 1];
+
+                // Staging index = roughly last 22% of path
+                var stagingPtIdx = Math.floor(pts.length * 0.78);
+
+                var distCruise = cd[stagingPtIdx];
+                var distFinal = totD - distCruise;
+                var speedAttack = speed * 1.45;  // 45% speed boost on final approach
+                var timeTotal = distCruise / speed + distFinal / speedAttack;
+                var distHold = holdPos ? haversine(tk[0], tk[1], holdPos[0], holdPos[1]) : 0;
+                var timeHold = distHold / speed;
+
+                // Draw ghost path
+                L.polyline(pts, { color, weight: 1.4, opacity: 0.3, dashArray: '4,7' }).addTo(pathLayer);
+                // Attack segment (last 22%)
+                L.polyline(pts.slice(stagingPtIdx), { color, weight: 2.2, opacity: 0.65 }).addTo(pathLayer);
+                // Staging dot
+                L.circleMarker(staging, { radius: 4, color, fillColor: color, fillOpacity: 0.2, weight: 1.5 }).addTo(pathLayer);
+
+                // Drone marker at takeoff
+                var marker = L.marker(tk, { icon: makeSVGIcon(color, 'drone', 0), zIndexOffset: 1000 }).addTo(droneLayer);
+                // Trail polyline
+                var trail = L.polyline([tk], { color, weight: 2.5, opacity: 0.85 }).addTo(droneLayer);
+
+                droneStates.push({
+                    i, color, marker, trail,
+                    pts, cd, totD, stagingPtIdx,
+                    speedBase: speed, speedAttack,
+                    timeTotal, distHold, timeHold,
+                    prog: 0, done: false, trailBuf: [],
+                });
+
+                waypointData.push({ id: i + 1, color, angleDeg, speed, altitude, totD, timeTotal, distHold, timeHold, pts, cd });
+
+                // Right-panel card
+                var card = document.createElement('div');
+                card.className = 'drone-card'; card.id = 'card-' + i;
+                card.innerHTML = `
+      <div class="dc-header">
+        <div class="dc-id" style="color:${color}">DRON-${String(i + 1).padStart(2, '0')}</div>
+        <div class="dc-status ready" id="cstat-${i}">LISTO</div>
+      </div>
+      <div class="dc-row"><span>Dist. Total</span><span class="dv">${(totD / 1000).toFixed(2)} km</span></div>
+      ${hld ? `<div class="dc-row"><span>ETA Holding</span><span class="dv">${formatTime(timeHold)}</span></div>` : ''}
+      <div class="dc-row"><span>ETA Objetivo</span><span class="dv" id="ceta-${i}">${formatTime(timeTotal)}</span></div>
+      <div class="dc-row"><span>Velocidad</span><span class="dv live" id="cspd-${i}">${speed.toFixed(1)} m/s</span></div>
+      <div class="dc-row"><span>Fase</span><span class="dv" id="cphase-${i}">CRUCERO</span></div>
+      <div class="dc-row"><span>Ángulo ataque</span><span class="dv">${angleDeg.toFixed(0)}°</span></div>
+      <div class="dc-progress"><div class="dc-progress-fill" id="cprog-${i}" style="background:${color}"></div></div>
+      <div class="dc-angle">
+        <span style="color:${color}">HDG</span>
+        <div class="dc-angle-bar"><div class="dc-angle-bar-fill" id="chdg-${i}" style="background:${color};width:${(angleDeg % 360) / 360 * 100}%"></div></div>
+        <span style="color:${color}" id="chdgv-${i}">${angleDeg.toFixed(0)}°</span>
+      </div>`;
+                cards.appendChild(card);
+            }
+
+            // Fit map
+            var allPts = [[tgt[0], tgt[1]], [tk[0], tk[1]]];
+            waypointData.forEach(d => d.pts.forEach(p => allPts.push(p)));
+            map.fitBounds(allPts, { padding: [50, 50] });
+
+            document.getElementById('btnSimular').disabled = false;
+            document.getElementById('status-bar').textContent = '● MISIÓN CALCULADA — ' + n + ' DRONES';
+            log('Rutas calculadas: ' + n + ' drones | patrón: ' + pattern + ' | radio: ' + radius + 'm | vel: ' + speed + 'm/s', 'warn');
+        }
+
+        // ═══════════════════════════════════════
+        // SIMULACIÓN
+        // ═══════════════════════════════════════
+        function iniciarSimulacion() {
+            if (simRunning || !droneStates.length) return;
+
+            // Reset all drone states
+            droneStates.forEach((ds, i) => {
+                ds.prog = 0; ds.done = false; ds.trailBuf = [];
+                ds.marker.setLatLng(ds.pts[0]);
+                ds.trail.setLatLngs([ds.pts[0]]);
+                document.getElementById('cstat-' + i).className = 'dc-status flying';
+                document.getElementById('cstat-' + i).textContent = 'EN VUELO';
+                document.getElementById('card-' + i).className = 'drone-card active-fly';
+                document.getElementById('cprog-' + i).style.width = '0%';
+                document.getElementById('cphase-' + i).textContent = 'CRUCERO';
+            });
+
+            simRunning = true; simStartTime = performance.now();
+            document.getElementById('btnSimular').style.display = 'none';
+            document.getElementById('btnStop').style.display = 'block';
+            document.getElementById('sim-hud').style.display = 'block';
+            document.getElementById('status-bar').textContent = '▶ SIMULACIÓN EN CURSO';
+            log('⬡ Enjambre desplegado — ' + droneStates.length + ' drones en vuelo', 'warn');
+            simRAF = requestAnimationFrame(animate);
+        }
+
+        function detenerSimulacion() {
+            simRunning = false;
+            if (simRAF) { cancelAnimationFrame(simRAF); simRAF = null; }
+            document.getElementById('btnSimular').style.display = 'block';
+            document.getElementById('btnStop').style.display = 'none';
+            document.getElementById('sim-hud').style.display = 'none';
+        }
+
+        var lastTS = null;
+        function animate(ts) {
+            if (!simRunning) return;
+            if (!lastTS) lastTS = ts;
+            var dtReal = (ts - lastTS) / 1000; // real seconds since last frame
+            lastTS = ts;
+            var simFactor = parseFloat(document.getElementById('speedSlider').value);
+            var dt = dtReal * simFactor; // simulated seconds this frame
+
+            var elapsed = (ts - simStartTime) / 1000 * simFactor;
+            var inFlight = 0, allDone = true;
+
+            droneStates.forEach((ds, i) => {
+                if (ds.done) return;
+                allDone = false; inFlight++;
+
+                // Speed profile: cruise → ramp up at stagingPtIdx
+                var stagingDist = ds.cd[ds.stagingPtIdx];
+                var phaseFrac = ds.prog / ds.totD;
+                var stagingFrac = stagingDist / ds.totD;
+                var curSpeed, phase;
+
+                if (ds.prog < stagingDist) {
+                    curSpeed = ds.speedBase;
+                    phase = 'CRUCERO';
+                } else {
+                    // smooth ramp: 0→1 over the last segment
+                    var t = (ds.prog - stagingDist) / (ds.totD - stagingDist);
+                    curSpeed = ds.speedBase + (ds.speedAttack - ds.speedBase) * easeInQuad(Math.min(t, 1));
+                    phase = 'ATAQUE ▶';
+                }
+
+                ds.prog = Math.min(ds.prog + curSpeed * dt, ds.totD);
+
+                // Position
+                var pos = interpPath(ds.pts, ds.cd, ds.prog);
+                var posNext = interpPath(ds.pts, ds.cd, Math.min(ds.prog + 10, ds.totD));
+                var hdg = bearing(pos[0], pos[1], posNext[0], posNext[1]);
+
+                ds.marker.setIcon(makeSVGIcon(ds.color, 'drone', hdg));
+                ds.marker.setLatLng(pos);
+
+                // Animated trail — last 30 points
+                ds.trailBuf.push(pos);
+                if (ds.trailBuf.length > 30) ds.trailBuf.shift();
+                ds.trail.setLatLngs(ds.trailBuf);
+
+                // Card update
+                var pct = (ds.prog / ds.totD) * 100;
+                var rem = Math.max(0, (ds.totD - ds.prog) / curSpeed);
+                document.getElementById('cprog-' + i).style.width = pct.toFixed(1) + '%';
+                document.getElementById('cspd-' + i).textContent = curSpeed.toFixed(1) + ' m/s';
+                document.getElementById('ceta-' + i).textContent = formatTime(rem);
+                document.getElementById('cphase-' + i).textContent = phase;
+                document.getElementById('chdgv-' + i).textContent = hdg.toFixed(0) + '°';
+                document.getElementById('chdg-' + i).style.width = (hdg / 360 * 100) + '%';
+
+                // Impact
+                if (ds.prog >= ds.totD) {
+                    ds.done = true;
+                    ds.marker.setLatLng(ds.pts[ds.pts.length - 1]);
+                    impactEffect(ds.pts[ds.pts.length - 1], ds.color);
+                    document.getElementById('cstat-' + i).className = 'dc-status impact';
+                    document.getElementById('cstat-' + i).textContent = 'IMPACTO';
+                    document.getElementById('card-' + i).className = 'drone-card hit';
+                    document.getElementById('cprog-' + i).style.width = '100%';
+                    document.getElementById('cphase-' + i).textContent = 'IMPACTO ✕';
+                    document.getElementById('ceta-' + i).textContent = '0s';
+                    log('DRON-' + String(i + 1).padStart(2, '0') + ' — IMPACTO CONFIRMADO', 'err');
+                }
+            });
+
+            // HUD
+            var eM = Math.floor(elapsed / 60), eS = Math.floor(elapsed % 60);
+            document.getElementById('sim-hud').textContent =
+                'T+ ' + String(eM).padStart(2, '0') + ':' + String(eS).padStart(2, '0') +
+                '  |  EN VUELO: ' + inFlight + ' / ' + droneStates.length;
+
+            if (allDone) {
+                simRunning = false;
+                document.getElementById('sim-hud').textContent = '■ MISIÓN COMPLETADA — TODOS IMPACTOS CONFIRMADOS';
+                document.getElementById('btnSimular').style.display = 'block';
+                document.getElementById('btnStop').style.display = 'none';
+                document.getElementById('status-bar').textContent = '■ MISIÓN COMPLETADA';
+                log('Misión completada — ' + droneStates.length + '/' + droneStates.length + ' impactos', 'warn');
+                lastTS = null; return;
+            }
+
+            lastTS = ts;
+            simRAF = requestAnimationFrame(animate);
+        }
+
+        // ─── Impact visual effect ─────────────
+        function impactEffect(pos, color) {
+            // Three expanding rings
+            [50, 110, 200].forEach((r, k) => {
+                var c = L.circle(pos, { radius: r, color: color, fillColor: color, fillOpacity: 0.25 - k * 0.07, weight: 1.5 + k * 0.5 }).addTo(effectLayer);
+                setTimeout(() => effectLayer.removeLayer(c), 1400 + k * 300);
+            });
+            // Red flash at center
+            var dot = L.circleMarker(pos, { radius: 8, color: '#ff0000', fillColor: '#ff4400', fillOpacity: 1, weight: 2 }).addTo(effectLayer);
+            setTimeout(() => effectLayer.removeLayer(dot), 3500);
+        }
+
+        // ═══════════════════════════════════════
+        // EXPORT / CLEAR / FORMAT
+        // ═══════════════════════════════════════
+        function formatTime(s) {
+            if (s < 60) return Math.round(s) + 's';
+            return Math.floor(s / 60) + 'min ' + String(Math.round(s % 60)).padStart(2, '0') + 's';
+        }
+
+        function exportarWaypoints() {
+            if (!waypointData.length) { log('Sin datos de misión', 'err'); return; }
+            var lines = ['=== SWARM ATTACK MISSION WAYPOINTS ===',
+                'Generado: ' + new Date().toISOString(),
+                'Drones: ' + waypointData.length, ''];
+            waypointData.forEach(d => {
+                lines.push('--- DRONE-' + String(d.id).padStart(2, '0') + ' ---');
+                lines.push('  Vel. crucero: ' + d.speed + ' m/s | Vel. ataque: ' + (d.speed * 1.45).toFixed(1) + ' m/s');
+                lines.push('  Altitud: ' + d.altitude + 'm | Ángulo: ' + d.angleDeg.toFixed(1) + '°');
+                lines.push('  Dist. total: ' + (d.totD / 1000).toFixed(3) + ' km | ETA: ' + formatTime(d.timeTotal));
+                lines.push('  WAYPOINTS:');
+                // Sample every 5th point
+                d.pts.forEach((p, j) => { if (j % 5 === 0) lines.push('    WP' + j + ' LAT=' + p[0].toFixed(6) + ' LNG=' + p[1].toFixed(6) + ' ALT=' + d.altitude + 'm'); });
+                lines.push('');
+            });
+            var a = document.createElement('a');
+            a.href = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/plain' }));
+            a.download = 'swarm_' + Date.now() + '.txt'; a.click();
+            log('Exportados ' + waypointData.length + ' drones');
+        }
+
+        function limpiarMision() {
+            detenerSimulacion(); lastTS = null;
+            pathLayer.clearLayers(); droneLayer.clearLayers(); effectLayer.clearLayers();
+            Object.keys(puntos).forEach(k => {
+                puntos[k] = null;
+                if (marcadores[k]) { map.removeLayer(marcadores[k]); marcadores[k] = null; }
+                var el = document.getElementById('st-' + k); if (el) el.textContent = '';
+            });
+            waypointData = []; droneStates = [];
+            document.getElementById('drone-cards').innerHTML = '';
+            document.getElementById('empty-state').style.display = 'block';
+            document.getElementById('btnSimular').disabled = true;
+            document.getElementById('status-bar').textContent = '● SYSTEM READY';
+            log('Misión limpiada', 'warn');
+        }
+
+        log('Sistema iniciado. Fija Takeoff y Objetivo en el mapa para comenzar.');
+    </script>
+</body>
+
+</html>
