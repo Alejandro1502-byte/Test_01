@@ -1,1259 +1,1643 @@
 <!DOCTYPE html>
 <html lang="es">
-
 <head>
-    <meta charset="UTF-8">
-    <title>SWARM // 3D CINEMATIC</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SWARM // SATELLITE STRIKE</title>
+<script src="https://cesium.com/downloads/cesiumjs/releases/1.111/Build/Cesium/Cesium.js"></script>
+<link href="https://cesium.com/downloads/cesiumjs/releases/1.111/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --g:#00ff88;--gd:#00aa55;--gk:#002a18;
+  --r:#ff3333;--a:#ffaa00;
+  --bg:#050a07;--pn:#06100a;--bd:#1a3a25;--tx:#b0d4b8;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100%;overflow:hidden;font-family:'Share Tech Mono',monospace;background:#000;}
+#cesiumContainer{position:absolute;inset:0;z-index:0;}
 
-        body {
-            background: #000;
-            overflow: hidden;
-            font-family: 'Share Tech Mono', monospace;
-        }
+/* Hide Cesium UI */
+.cesium-widget-credits,.cesium-credit-logoContainer,.cesium-credit-textContainer{display:none!important;}
+.cesium-viewer-toolbar,.cesium-viewer-animationContainer,.cesium-viewer-timelineContainer,.cesium-viewer-bottom{display:none!important;}
 
-        canvas {
-            display: block;
-        }
+/* SCANLINES */
+#scan{position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,255,136,0.006) 3px,rgba(0,255,136,0.006) 4px);pointer-events:none;z-index:10;}
 
-        #ui {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-        }
+/* CORNERS */
+.cor{position:fixed;width:22px;height:22px;z-index:20;pointer-events:none;}
+.cor.tl{top:10px;left:10px;border-top:2px solid var(--g);border-left:2px solid var(--g);}
+.cor.tr{top:10px;right:10px;border-top:2px solid var(--g);border-right:2px solid var(--g);}
+.cor.bl{bottom:10px;left:10px;border-bottom:2px solid var(--g);border-left:2px solid var(--g);}
+.cor.br{bottom:10px;right:10px;border-bottom:2px solid var(--g);border-right:2px solid var(--g);}
 
-        /* HUD corners */
-        .corner {
-            position: absolute;
-            width: 24px;
-            height: 24px;
-            pointer-events: none;
-        }
+/* TOP BAR */
+#topbar{position:fixed;top:0;left:0;right:0;height:46px;background:linear-gradient(180deg,rgba(0,0,0,0.92) 70%,transparent);display:flex;align-items:center;justify-content:space-between;padding:0 22px;z-index:30;pointer-events:none;}
+.logo{font-family:'Orbitron',sans-serif;font-size:15px;font-weight:900;color:var(--g);letter-spacing:5px;}
+.logo span{color:var(--r);}
+#mstatus{font-size:10px;color:var(--a);letter-spacing:2px;text-align:center;}
+#clk{font-size:10px;color:var(--gd);letter-spacing:3px;}
 
-        .corner.tl {
-            top: 12px;
-            left: 12px;
-            border-top: 2px solid #00ff88;
-            border-left: 2px solid #00ff88;
-        }
+/* LEFT PANEL */
+#panel{position:fixed;top:56px;left:14px;width:238px;background:rgba(4,9,6,0.96);border:1px solid var(--bd);padding:12px;z-index:30;backdrop-filter:blur(6px);}
+.pt{font-family:'Orbitron',sans-serif;font-size:8px;letter-spacing:3px;color:var(--gd);text-transform:uppercase;margin-bottom:9px;display:flex;align-items:center;gap:5px;}
+.pt::before{content:'';width:6px;height:6px;border:1px solid var(--gd);transform:rotate(45deg);display:inline-block;flex-shrink:0;}
 
-        .corner.tr {
-            top: 12px;
-            right: 12px;
-            border-top: 2px solid #00ff88;
-            border-right: 2px solid #00ff88;
-        }
+.btac{width:100%;padding:6px 10px;margin-bottom:4px;background:transparent;border:1px solid var(--bd);color:var(--tx);font-family:'Share Tech Mono',monospace;font-size:11px;cursor:pointer;text-align:left;letter-spacing:1px;transition:all .15s;display:flex;align-items:center;gap:7px;}
+.btac:hover{border-color:var(--g);color:var(--g);background:var(--gk);}
+.btac.active{border-color:var(--g);color:var(--g);background:var(--gk);box-shadow:0 0 8px rgba(0,255,136,.2);}
+.btac .dot{width:5px;height:5px;border-radius:50%;background:var(--gd);flex-shrink:0;}
+.btac.active .dot{background:var(--g);box-shadow:0 0 4px var(--g);animation:bl 1s steps(1) infinite;}
+@keyframes bl{50%{opacity:0}}
+.btac .bk{margin-left:auto;font-size:10px;color:var(--g);}
 
-        .corner.bl {
-            bottom: 12px;
-            left: 12px;
-            border-bottom: 2px solid #00ff88;
-            border-left: 2px solid #00ff88;
-        }
+.pr{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;gap:5px;}
+.pr label{font-size:9px;color:var(--gd);letter-spacing:1px;flex:1;}
+.pr input[type=number]{width:72px;background:var(--bg);border:1px solid var(--bd);color:var(--g);font-family:'Share Tech Mono',monospace;font-size:11px;padding:3px 5px;text-align:right;outline:none;}
+.pr input:focus,.pr select:focus{border-color:var(--g);}
+.pr select{width:100px;background:var(--bg);border:1px solid var(--bd);color:var(--g);font-family:'Share Tech Mono',monospace;font-size:10px;padding:2px 4px;outline:none;}
 
-        .corner.br {
-            bottom: 12px;
-            right: 12px;
-            border-bottom: 2px solid #00ff88;
-            border-right: 2px solid #00ff88;
-        }
+.srow{display:flex;align-items:center;gap:7px;margin-bottom:7px;}
+.srow label{font-size:9px;color:var(--gd);white-space:nowrap;}
+.srow input[type=range]{-webkit-appearance:none;flex:1;height:3px;background:var(--bd);outline:none;}
+.srow input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:var(--g);cursor:pointer;border:2px solid var(--bg);box-shadow:0 0 5px var(--g);}
+.sv{font-size:11px;color:var(--g);width:28px;text-align:right;}
 
-        /* Top bar */
-        #topbar {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 48px;
-            background: linear-gradient(180deg, rgba(0, 0, 0, 0.85), transparent);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0 24px;
-            pointer-events: none;
-        }
+.ba{width:100%;padding:8px;margin-bottom:4px;border:none;font-family:'Orbitron',sans-serif;font-size:9px;letter-spacing:2px;cursor:pointer;transition:all .2s;text-transform:uppercase;}
+.bg2{background:var(--g);color:var(--bg);font-weight:700;}
+.bg2:hover{background:#00ffaa;box-shadow:0 0 16px rgba(0,255,136,.4);}
+.bo2{background:transparent;border:1px solid var(--g);color:var(--g);}
+.bo2:hover{background:var(--gk);}
+.br2{background:transparent;border:1px solid var(--r);color:var(--r);}
+.br2:hover{background:rgba(255,50,50,.07);}
+.ba:disabled{opacity:.3;cursor:not-allowed;}
 
-        #topbar .logo {
-            font-family: 'Orbitron', sans-serif;
-            font-size: 16px;
-            font-weight: 900;
-            color: #00ff88;
-            letter-spacing: 5px;
-        }
+/* RIGHT TELEMETRY */
+#telem{position:fixed;top:56px;right:14px;width:196px;background:rgba(4,9,6,0.96);border:1px solid var(--bd);padding:10px;z-index:30;max-height:calc(100vh - 170px);overflow-y:auto;backdrop-filter:blur(6px);}
+.tc{border:1px solid var(--bd);margin-bottom:4px;padding:6px;background:var(--bg);transition:border-color .3s,box-shadow .3s;}
+.tc.fly{border-color:#00ccff;}
+.tc.hit{border-color:var(--r);box-shadow:0 0 8px rgba(255,50,50,.2);}
+.tch{display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;}
+.tcid{font-family:'Orbitron',sans-serif;font-size:9px;font-weight:700;}
+.tcst{font-size:7px;letter-spacing:1px;padding:1px 4px;border:1px solid;}
+.tcst.ready{color:var(--g);border-color:var(--g);}
+.tcst.fly{color:#00ccff;border-color:#00ccff;animation:bl .8s steps(1) infinite;}
+.tcst.hit{color:var(--r);border-color:var(--r);}
+.tcr{display:flex;justify-content:space-between;font-size:8px;color:#3a5a42;margin-bottom:1px;}
+.tcr span:last-child{color:var(--tx);}
+.tcp{height:2px;background:var(--bd);margin-top:3px;}
+.tcpf{height:100%;transition:width .08s linear;}
 
-        #topbar .logo span {
-            color: #ff3333;
-        }
+/* LOG */
+#logbox{position:fixed;bottom:14px;left:14px;width:238px;background:rgba(4,9,6,.95);border:1px solid var(--bd);padding:6px 9px;height:72px;overflow-y:auto;font-size:8px;line-height:1.8;z-index:30;}
+.ll{color:var(--gd)}.ll.w{color:var(--a)}.ll.e{color:var(--r)}
+.ll span{color:#1a3a25;margin-right:4px;}
 
-        #clock {
-            font-size: 11px;
-            color: #00aa55;
-            letter-spacing: 3px;
-        }
+/* HUD */
+#hud{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);z-index:30;background:rgba(4,9,6,.96);border:1px solid var(--g);padding:5px 20px;font-family:'Orbitron',sans-serif;font-size:11px;color:var(--g);letter-spacing:3px;display:none;pointer-events:none;white-space:nowrap;}
 
-        #mission-status {
-            font-size: 11px;
-            color: #ffaa00;
-            letter-spacing: 2px;
-        }
+/* MODE TIP */
+#modetip{position:fixed;top:56px;left:50%;transform:translateX(-50%);font-family:'Orbitron',sans-serif;font-size:10px;letter-spacing:3px;color:var(--a);z-index:40;background:rgba(4,9,6,.96);padding:4px 16px;border:1px solid var(--a);display:none;}
 
-        /* Control panel */
-        #panel {
-            position: absolute;
-            top: 60px;
-            left: 16px;
-            width: 230px;
-            background: rgba(5, 12, 8, 0.92);
-            border: 1px solid #1a3a25;
-            padding: 14px;
-            pointer-events: all;
-        }
+/* CAMERA HINT */
+#camhint{position:fixed;bottom:14px;right:14px;font-size:8px;color:#2a4a32;letter-spacing:1px;z-index:30;line-height:1.9;text-align:right;pointer-events:none;}
 
-        #panel h3 {
-            font-family: 'Orbitron', sans-serif;
-            font-size: 9px;
-            letter-spacing: 3px;
-            color: #00aa55;
-            margin-bottom: 12px;
-            text-transform: uppercase;
-        }
-
-        .ctrl-row {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 8px;
-        }
-
-        .ctrl-row label {
-            font-size: 10px;
-            color: #5a8a62;
-            letter-spacing: 1px;
-        }
-
-        .ctrl-row input[type=range] {
-            width: 90px;
-            accent-color: #00ff88;
-            cursor: pointer;
-        }
-
-        .ctrl-row input[type=number] {
-            width: 70px;
-            background: #050a07;
-            border: 1px solid #1a3a25;
-            color: #00ff88;
-            font-family: 'Share Tech Mono', monospace;
-            font-size: 11px;
-            padding: 3px 5px;
-            text-align: right;
-            outline: none;
-        }
-
-        .ctrl-row select {
-            width: 100px;
-            background: #050a07;
-            border: 1px solid #1a3a25;
-            color: #00ff88;
-            font-family: 'Share Tech Mono', monospace;
-            font-size: 10px;
-            padding: 2px 4px;
-            outline: none;
-        }
-
-        .ctrl-val {
-            font-size: 11px;
-            color: #00ff88;
-            width: 32px;
-            text-align: right;
-        }
-
-        .btn {
-            width: 100%;
-            padding: 8px;
-            margin-bottom: 5px;
-            border: none;
-            font-family: 'Orbitron', sans-serif;
-            font-size: 10px;
-            letter-spacing: 2px;
-            cursor: pointer;
-            transition: all 0.2s;
-            text-transform: uppercase;
-        }
-
-        .btn-green {
-            background: #00ff88;
-            color: #050a07;
-            font-weight: 700;
-        }
-
-        .btn-green:hover {
-            background: #00ffaa;
-            box-shadow: 0 0 16px rgba(0, 255, 136, 0.5);
-        }
-
-        .btn-outline-green {
-            background: transparent;
-            border: 1px solid #00ff88;
-            color: #00ff88;
-        }
-
-        .btn-outline-green:hover {
-            background: rgba(0, 255, 136, 0.08);
-        }
-
-        .btn-outline-red {
-            background: transparent;
-            border: 1px solid #ff3333;
-            color: #ff3333;
-        }
-
-        .btn-outline-red:hover {
-            background: rgba(255, 50, 50, 0.08);
-        }
-
-        .btn:disabled {
-            opacity: 0.3;
-            cursor: not-allowed;
-        }
-
-        /* Drone telemetry */
-        #telemetry {
-            position: absolute;
-            top: 60px;
-            right: 16px;
-            width: 200px;
-            background: rgba(5, 12, 8, 0.92);
-            border: 1px solid #1a3a25;
-            padding: 12px;
-            max-height: calc(100vh - 120px);
-            overflow-y: auto;
-        }
-
-        #telemetry h3 {
-            font-family: 'Orbitron', sans-serif;
-            font-size: 9px;
-            letter-spacing: 3px;
-            color: #00aa55;
-            margin-bottom: 10px;
-        }
-
-        .tcard {
-            border: 1px solid #1a3a25;
-            margin-bottom: 5px;
-            padding: 7px;
-            background: #050a07;
-            transition: border-color 0.3s;
-        }
-
-        .tcard.fly {
-            border-color: #00ccff;
-        }
-
-        .tcard.hit {
-            border-color: #ff3333;
-            background: rgba(255, 30, 30, 0.05);
-        }
-
-        .tc-head {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 4px;
-        }
-
-        .tc-id {
-            font-family: 'Orbitron', sans-serif;
-            font-size: 10px;
-            font-weight: 700;
-        }
-
-        .tc-st {
-            font-size: 8px;
-            letter-spacing: 1px;
-            padding: 1px 4px;
-            border: 1px solid;
-        }
-
-        .tc-st.ready {
-            color: #00ff88;
-            border-color: #00ff88;
-        }
-
-        .tc-st.fly {
-            color: #00ccff;
-            border-color: #00ccff;
-            animation: bl 0.8s steps(1) infinite;
-        }
-
-        .tc-st.hit {
-            color: #ff3333;
-            border-color: #ff3333;
-        }
-
-        @keyframes bl {
-            50% {
-                opacity: 0
-            }
-        }
-
-        .tc-row {
-            display: flex;
-            justify-content: space-between;
-            font-size: 8px;
-            color: #3a6a42;
-            margin-bottom: 1px;
-        }
-
-        .tc-row span:last-child {
-            color: #b0d4b8;
-        }
-
-        .tc-prog {
-            height: 2px;
-            background: #1a3a25;
-            margin-top: 4px;
-        }
-
-        .tc-prog-fill {
-            height: 100%;
-            transition: width 0.1s;
-        }
-
-        /* Camera controls hint */
-        #hint {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            font-size: 9px;
-            color: #2a5a32;
-            letter-spacing: 2px;
-            pointer-events: none;
-            text-align: center;
-        }
-
-        /* scanlines */
-        #scan {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0, 255, 136, 0.008) 2px, rgba(0, 255, 136, 0.008) 4px);
-            pointer-events: none;
-        }
-
-        /* log */
-        #log {
-            position: absolute;
-            bottom: 16px;
-            left: 16px;
-            width: 230px;
-            background: rgba(5, 12, 8, 0.85);
-            border: 1px solid #1a3a25;
-            padding: 7px 10px;
-            height: 72px;
-            overflow-y: auto;
-            font-size: 8px;
-            line-height: 1.7;
-        }
-
-        .ll {
-            color: #00aa55;
-        }
-
-        .ll.w {
-            color: #ffaa00;
-        }
-
-        .ll.e {
-            color: #ff3333;
-        }
-
-        .ll span {
-            color: #1a3a25;
-            margin-right: 5px;
-        }
-
-        ::-webkit-scrollbar {
-            width: 3px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: #050a07;
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: #1a3a25;
-        }
-    </style>
-    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap"
-        rel="stylesheet">
+::-webkit-scrollbar{width:3px;}
+::-webkit-scrollbar-track{background:var(--bg);}
+::-webkit-scrollbar-thumb{background:var(--bd);}
+</style>
 </head>
-
 <body>
 
-    <canvas id="c"></canvas>
+<div id="cesiumContainer"></div>
+<div id="scan"></div>
+<div class="cor tl"></div><div class="cor tr"></div>
+<div class="cor bl"></div><div class="cor br"></div>
 
-    <div id="ui">
-        <div id="scan"></div>
-        <div class="corner tl"></div>
-        <div class="corner tr"></div>
-        <div class="corner bl"></div>
-        <div class="corner br"></div>
+<div id="topbar">
+  <div class="logo">SWARM <span>//</span> SATELLITE STRIKE</div>
+  <div id="mstatus">● STANDBY — Define Takeoff y Objetivo</div>
+  <div id="clk">--:--:-- UTC</div>
+</div>
 
-        <div id="topbar">
-            <div class="logo">SWARM <span>//</span> 3D STRIKE</div>
-            <div id="mission-status">● STANDBY</div>
-            <div id="clock">--:--:-- UTC</div>
-        </div>
+<div id="panel">
+  <div class="pt">Puntos de Misión</div>
+  <button class="btac" id="btnTK" onclick="activar('takeoff')"><div class="dot"></div>TAKEOFF<span class="bk" id="stk"></span></button>
+  <button class="btac" id="btnTG" onclick="activar('target')"><div class="dot"></div>OBJETIVO<span class="bk" id="stg"></span></button>
+  <button class="btac" id="btnHD" onclick="activar('holding')"><div class="dot"></div>PUNTO ESPERA<span class="bk" id="shd"></span></button>
 
-        <div id="panel">
-            <h3>⬡ Parámetros de Misión</h3>
-            <div class="ctrl-row"><label>DRONES</label><input type="number" id="nDrones" value="8" min="3"
-                    max="12"><span class="ctrl-val" id=""></span></div>
-            <div class="ctrl-row"><label>VELOCIDAD m/s</label><input type="number" id="speedVal" value="18" min="5"
-                    max="60"></div>
-            <div class="ctrl-row"><label>ALTITUD m</label><input type="number" id="altVal" value="120" min="30"
-                    max="400"></div>
-            <div class="ctrl-row"><label>RADIO m</label><input type="number" id="radVal" value="400" min="100"
-                    max="1000"></div>
-            <div class="ctrl-row"><label>PATRÓN</label>
-                <select id="pattern">
-                    <option value="radial">Radial</option>
-                    <option value="spiral">Espiral</option>
-                    <option value="pincer">Tenaza</option>
-                </select>
-            </div>
-            <div class="ctrl-row"><label>SIM ×</label>
-                <input type="range" id="simSpeed" min="0.5" max="20" step="0.5" value="4">
-                <span class="ctrl-val" id="simSpeedVal">4×</span>
-            </div>
-            <div class="ctrl-row"><label>CÁMARA</label>
-                <select id="camMode">
-                    <option value="orbit">Órbita libre</option>
-                    <option value="follow">Seguir dron</option>
-                    <option value="cinematic">Cinemático</option>
-                    <option value="top">Vista cenital</option>
-                </select>
-            </div>
-            <br>
-            <button class="btn btn-green" id="btnLaunch" onclick="launchMission()">▶ LANZAR MISIÓN</button>
-            <button class="btn btn-outline-green" id="btnReset" onclick="resetMission()">↺ REINICIAR</button>
-            <button class="btn btn-outline-red" id="btnRegen" onclick="regenCity()">⬡ NUEVA CIUDAD</button>
-        </div>
+  <div class="pt" style="margin-top:8px;">Parámetros</div>
+  <div class="pr"><label>DRONES</label><input type="number" id="nDr" value="8" min="3" max="12"></div>
+  <div class="pr"><label>VELOCIDAD m/s</label><input type="number" id="spd" value="18" min="5" max="80"></div>
+  <div class="pr"><label>ALTITUD m</label><input type="number" id="alt" value="200" min="40" max="800"></div>
+  <div class="pr"><label>RADIO m</label><input type="number" id="rad" value="600" min="100" max="3000"></div>
+  <div class="pr"><label>CURVATURA</label><input type="number" id="curv" value="1.4" min="0.3" max="3.0" step="0.1"></div>
+  <div class="pr"><label>PATRÓN</label>
+    <select id="pat">
+      <option value="radial">Radial</option>
+      <option value="spiral">Espiral</option>
+      <option value="pincer">Tenaza</option>
+    </select>
+  </div>
+  <div class="srow">
+    <label>SIM ×</label>
+    <input type="range" id="simspd" min="1" max="30" step="1" value="6">
+    <span class="sv" id="simval">6×</span>
+  </div>
 
-        <div id="telemetry">
-            <h3>▸ TELEMETRÍA</h3>
-            <div id="tcards"></div>
-        </div>
+  <div class="pt" style="margin-top:4px;">Acciones</div>
+  <button class="ba bg2" id="btnCalc"   onclick="calcular()"  disabled>▶ CALCULAR RUTAS</button>
+  <button class="ba bo2" id="btnLaunch" onclick="lanzar()"    disabled>⬡ LANZAR ATAQUE</button>
+  <button class="ba bo2" id="btnStop"   onclick="detener()"   style="display:none">■ DETENER</button>
+  <button class="ba br2"                onclick="limpiar()">✕ LIMPIAR</button>
+</div>
 
-        <div id="hint">DRAG órbita · SCROLL zoom · SHIFT+DRAG paneo</div>
-        <div id="log"></div>
+<div id="telem">
+  <div class="pt">Telemetría</div>
+  <div id="tcards">
+    <div style="color:#2a4a32;font-size:9px;letter-spacing:1px;text-align:center;padding:18px 0;line-height:2.2;">
+      SIN DATOS<br>Define puntos<br>y calcula rutas
     </div>
-
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script>
-        // ═══════════════════════════════════════════════════
-        // THREE.JS SETUP
-        // ═══════════════════════════════════════════════════
-        var W = window.innerWidth, H = window.innerHeight;
-        var renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: true, alpha: false });
-        renderer.setSize(W, H);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-        renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        renderer.toneMappingExposure = 0.85;
-
-        var scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x050812);
-        scene.fog = new THREE.FogExp2(0x050812, 0.0018);
-
-        var camera = new THREE.PerspectiveCamera(55, W / H, 1, 8000);
-        camera.position.set(0, 400, 700);
-        camera.lookAt(0, 0, 0);
-
-        window.addEventListener('resize', () => {
-            W = window.innerWidth; H = window.innerHeight;
-            renderer.setSize(W, H);
-            camera.aspect = W / H; camera.updateProjectionMatrix();
-        });
-
-        // ─── Lighting ────────────────────────────────────
-        var ambLight = new THREE.AmbientLight(0x102030, 0.6);
-        scene.add(ambLight);
-        var dirLight = new THREE.DirectionalLight(0xffeedd, 0.9);
-        dirLight.position.set(300, 600, 200);
-        dirLight.castShadow = true;
-        dirLight.shadow.mapSize.set(2048, 2048);
-        dirLight.shadow.camera.near = 10;
-        dirLight.shadow.camera.far = 2000;
-        dirLight.shadow.camera.left = dirLight.shadow.camera.bottom = -800;
-        dirLight.shadow.camera.right = dirLight.shadow.camera.top = 800;
-        scene.add(dirLight);
-        // Orange fire glow (dynamic, updated on impact)
-        var fireGlow = new THREE.PointLight(0xff4400, 0, 300);
-        scene.add(fireGlow);
-
-        // ─── Stars ───────────────────────────────────────
-        (function () {
-            var geo = new THREE.BufferGeometry();
-            var verts = [];
-            for (var i = 0; i < 2000; i++) {
-                verts.push((Math.random() - 0.5) * 6000, (Math.random() * 1500 + 200), (Math.random() - 0.5) * 6000);
-            }
-            geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
-            scene.add(new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xffffff, size: 1.2, transparent: true, opacity: 0.7 })));
-        })();
-
-        // ─── Ground ──────────────────────────────────────
-        var groundGeo = new THREE.PlaneGeometry(3000, 3000, 40, 40);
-        var groundMat = new THREE.MeshLambertMaterial({ color: 0x0a1a0f });
-        var ground = new THREE.Mesh(groundGeo, groundMat);
-        ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true;
-        scene.add(ground);
-
-        // Grid
-        var grid = new THREE.GridHelper(3000, 60, 0x0d2a15, 0x0d2a15);
-        grid.position.y = 0.5;
-        scene.add(grid);
-
-        // ═══════════════════════════════════════════════════
-        // PROCEDURAL CITY
-        // ═══════════════════════════════════════════════════
-        var cityGroup = new THREE.Group();
-        scene.add(cityGroup);
-        var buildingMeshes = []; // {mesh, origY, origScale, health:1}
-
-        var BLOCK_COLORS = [0x1a2a1f, 0x162218, 0x0f1a12, 0x1f2f22, 0x0c1810, 0x243020];
-        var WINDOW_COLORS = [0xffee88, 0xffcc44, 0x88ccff, 0xffffff, 0x44ffaa];
-
-        function regenCity() {
-            // Clear old
-            while (cityGroup.children.length) cityGroup.remove(cityGroup.children[0]);
-            buildingMeshes = [];
-
-            var CITY_SIZE = 900;
-            var BLOCK = 80;
-            var rng = (a, b) => a + Math.random() * (b - a);
-
-            for (var bx = -CITY_SIZE / 2; bx < CITY_SIZE / 2; bx += BLOCK) {
-                for (var bz = -CITY_SIZE / 2; bz < CITY_SIZE / 2; bz += BLOCK) {
-                    // distance from center → taller buildings downtown
-                    var dist = Math.sqrt(bx * bx + bz * bz);
-                    var maxH = dist < 150 ? rng(80, 260) : dist < 350 ? rng(20, 120) : rng(8, 50);
-
-                    var numB = Math.floor(rng(1, 4));
-                    for (var b = 0; b < numB; b++) {
-                        var w = rng(12, BLOCK * 0.7), d = rng(12, BLOCK * 0.7), h = rng(maxH * 0.3, maxH);
-                        var x = bx + rng(5, BLOCK - w - 5), z = bz + rng(5, BLOCK - d - 5);
-
-                        var geo = new THREE.BoxGeometry(w, h, d);
-                        var col = BLOCK_COLORS[Math.floor(Math.random() * BLOCK_COLORS.length)];
-                        var mat = new THREE.MeshLambertMaterial({ color: col });
-                        var mesh = new THREE.Mesh(geo, mat);
-                        mesh.position.set(x + w / 2, h / 2, z + d / 2);
-                        mesh.castShadow = true; mesh.receiveShadow = true;
-                        cityGroup.add(mesh);
-
-                        // Windows — small emissive planes
-                        addWindows(mesh, w, h, d);
-
-                        buildingMeshes.push({ mesh, origY: h / 2, origH: h, w, d, health: 1, burning: false, collapsed: false });
-                    }
-                }
-            }
-            log('Ciudad generada — ' + buildingMeshes.length + ' edificios');
-        }
-
-        function addWindows(parent, w, h, d) {
-            var rows = Math.floor(h / 8), cols = Math.floor(w / 6);
-            if (rows < 1 || cols < 1) return;
-            var wMat = new THREE.MeshBasicMaterial({
-                color: WINDOW_COLORS[Math.floor(Math.random() * WINDOW_COLORS.length)],
-                transparent: true, opacity: 0.7 + Math.random() * 0.3
-            });
-            var wGeo = new THREE.PlaneGeometry(2.5, 3);
-            for (var r = 0; r < Math.min(rows, 12); r++) {
-                for (var c = 0; c < Math.min(cols, 8); c++) {
-                    if (Math.random() < 0.4) continue; // some dark windows
-                    var wx = parent.position.x - w / 2 + c * (w / cols) + 3;
-                    var wy = 5 + r * 8;
-                    var wz = parent.position.z + d / 2 + 0.1;
-                    var wm = new THREE.Mesh(wGeo, wMat);
-                    wm.position.set(wx, wy, wz);
-                    parent.parent ? parent.parent.add(wm) : cityGroup.add(wm);
-                }
-            }
-        }
-
-        // ═══════════════════════════════════════════════════
-        // DRONE MODEL (quadcopter)
-        // ═══════════════════════════════════════════════════
-        function makeDroneModel(color) {
-            var g = new THREE.Group();
-            var col = new THREE.Color(color);
-
-            // Body
-            var bodyGeo = new THREE.BoxGeometry(4, 1.5, 4);
-            var bodyMat = new THREE.MeshLambertMaterial({ color: 0x222222 });
-            var body = new THREE.Mesh(bodyGeo, bodyMat);
-            g.add(body);
-
-            // Camera bump
-            var camGeo = new THREE.CylinderGeometry(0.8, 0.8, 1, 8);
-            var camMat = new THREE.MeshLambertMaterial({ color: 0x111111 });
-            var cam = new THREE.Mesh(camGeo, camMat);
-            cam.position.set(0, -1, 0); g.add(cam);
-
-            // 4 arms
-            var armMat = new THREE.MeshLambertMaterial({ color: 0x333333 });
-            [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(([sx, sz]) => {
-                var arm = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.4, 8), armMat);
-                arm.position.set(sx * 4, 0, sz * 4);
-                arm.rotation.y = Math.atan2(sx, sz);
-                g.add(arm);
-
-                // Rotor ring
-                var rGeo = new THREE.TorusGeometry(3, 0.3, 6, 16);
-                var rMat = new THREE.MeshLambertMaterial({ color: col, emissive: col, emissiveIntensity: 0.3 });
-                var rotor = new THREE.Mesh(rGeo, rMat);
-                rotor.position.set(sx * 7, 0.4, sz * 7);
-                rotor.rotation.x = Math.PI / 2;
-                rotor.userData.isRotor = true;
-                g.add(rotor);
-
-                // Rotor blades (flat cross)
-                var blMat = new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.55, side: THREE.DoubleSide });
-                ['x', 'z'].forEach(axis => {
-                    var bl = new THREE.Mesh(new THREE.PlaneGeometry(5.5, 0.6), blMat);
-                    bl.position.set(sx * 7, 0.4, sz * 7);
-                    if (axis === 'z') bl.rotation.y = Math.PI / 2;
-                    bl.userData.isRotor = true;
-                    g.add(bl);
-                });
-            });
-
-            // Color LED strips on body
-            var ledMat = new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.8 });
-            var led = new THREE.Mesh(new THREE.BoxGeometry(3, 0.3, 0.3), ledMat);
-            led.position.set(0, 0.9, 1.5); g.add(led);
-
-            // Point light on drone
-            var light = new THREE.PointLight(col, 0.8, 60);
-            light.position.set(0, -2, 0);
-            g.add(light);
-            g.userData.light = light;
-
-            return g;
-        }
-
-        // ═══════════════════════════════════════════════════
-        // PARTICLE SYSTEM (fire / smoke / explosion)
-        // ═══════════════════════════════════════════════════
-        var particleSystems = [];
-
-        function createFireSystem(pos, scale) {
-            var count = 200;
-            var geo = new THREE.BufferGeometry();
-            var positions = new Float32Array(count * 3);
-            var velocities = [];
-            var lifetimes = [];
-            var colors = new Float32Array(count * 3);
-
-            for (var i = 0; i < count; i++) {
-                positions[i * 3] = pos.x + (Math.random() - 0.5) * scale * 2;
-                positions[i * 3 + 1] = pos.y;
-                positions[i * 3 + 2] = pos.z + (Math.random() - 0.5) * scale * 2;
-                velocities.push(new THREE.Vector3((Math.random() - 0.5) * 8, (Math.random() * 30 + 10), (Math.random() - 0.5) * 8));
-                lifetimes.push(Math.random());
-                colors[i * 3] = 1; colors[i * 3 + 1] = Math.random() * 0.5; colors[i * 3 + 2] = 0;
-            }
-            geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-            geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-
-            var mat = new THREE.PointsMaterial({ size: scale * 0.8, vertexColors: true, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false });
-            var ps = new THREE.Points(geo, mat);
-            ps.userData = { velocities, lifetimes, origin: pos.clone(), scale, type: 'fire', age: 0, maxAge: 12 };
-            scene.add(ps);
-            particleSystems.push(ps);
-            return ps;
-        }
-
-        function createSmokeSystem(pos, scale) {
-            var count = 120;
-            var geo = new THREE.BufferGeometry();
-            var positions = new Float32Array(count * 3);
-            var velocities = [];
-            var lifetimes = [];
-
-            for (var i = 0; i < count; i++) {
-                positions[i * 3] = pos.x + (Math.random() - 0.5) * scale;
-                positions[i * 3 + 1] = pos.y + Math.random() * scale;
-                positions[i * 3 + 2] = pos.z + (Math.random() - 0.5) * scale;
-                velocities.push(new THREE.Vector3((Math.random() - 0.5) * 3, (Math.random() * 15 + 5), (Math.random() - 0.5) * 3));
-                lifetimes.push(Math.random());
-            }
-            geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-            var mat = new THREE.PointsMaterial({ color: 0x333333, size: scale * 1.2, transparent: true, opacity: 0.4, blending: THREE.NormalBlending, depthWrite: false });
-            var ps = new THREE.Points(geo, mat);
-            ps.userData = { velocities, lifetimes, origin: pos.clone(), scale, type: 'smoke', age: 0, maxAge: 20 };
-            scene.add(ps);
-            particleSystems.push(ps);
-            return ps;
-        }
-
-        function createExplosion(pos, scale) {
-            var count = 300;
-            var geo = new THREE.BufferGeometry();
-            var positions = new Float32Array(count * 3);
-            var velocities = [], lifetimes = [];
-            var colors = new Float32Array(count * 3);
-
-            for (var i = 0; i < count; i++) {
-                var theta = Math.random() * Math.PI * 2, phi = Math.random() * Math.PI;
-                var r = Math.random() * scale * 1.5;
-                positions[i * 3] = pos.x + r * Math.sin(phi) * Math.cos(theta);
-                positions[i * 3 + 1] = pos.y + r * Math.sin(phi) * Math.sin(theta);
-                positions[i * 3 + 2] = pos.z + r * Math.cos(phi);
-                var spd = Math.random() * 60 + 20;
-                velocities.push(new THREE.Vector3(
-                    Math.sin(phi) * Math.cos(theta) * spd,
-                    Math.abs(Math.sin(phi) * Math.sin(theta)) * spd + 10,
-                    Math.cos(phi) * spd
-                ));
-                lifetimes.push(Math.random() * 0.3);
-                // Orange to white gradient
-                var t = Math.random();
-                colors[i * 3] = 1; colors[i * 3 + 1] = t * 0.6; colors[i * 3 + 2] = t * 0.2;
-            }
-            geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-            geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-            var mat = new THREE.PointsMaterial({ size: scale * 0.6, vertexColors: true, transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false });
-            var ps = new THREE.Points(geo, mat);
-            ps.userData = { velocities, lifetimes, origin: pos.clone(), scale, type: 'explosion', age: 0, maxAge: 3 };
-            scene.add(ps);
-            particleSystems.push(ps);
-            return ps;
-        }
-
-        function updateParticles(dt) {
-            for (var k = particleSystems.length - 1; k >= 0; k--) {
-                var ps = particleSystems[k];
-                var ud = ps.userData;
-                ud.age += dt;
-                if (ud.age > ud.maxAge) {
-                    scene.remove(ps);
-                    ps.geometry.dispose();
-                    particleSystems.splice(k, 1);
-                    continue;
-                }
-                var pos = ps.geometry.attributes.position.array;
-                var count = pos.length / 3;
-                var fade = 1 - ud.age / ud.maxAge;
-
-                for (var i = 0; i < count; i++) {
-                    ud.lifetimes[i] += dt;
-                    var lf = ud.lifetimes[i];
-
-                    if (ud.type === 'explosion') {
-                        if (lf > 1.5) { // respawn
-                            pos[i * 3] = ud.origin.x + (Math.random() - 0.5) * ud.scale * 0.5;
-                            pos[i * 3 + 1] = ud.origin.y;
-                            pos[i * 3 + 2] = ud.origin.z + (Math.random() - 0.5) * ud.scale * 0.5;
-                            ud.lifetimes[i] = 0;
-                        } else {
-                            var v = ud.velocities[i];
-                            pos[i * 3] += v.x * dt; pos[i * 3 + 1] += v.y * dt; pos[i * 3 + 2] += v.z * dt;
-                            v.y -= 30 * dt; // gravity
-                        }
-                    } else if (ud.type === 'fire') {
-                        if (lf > 1.2) {
-                            pos[i * 3] = ud.origin.x + (Math.random() - 0.5) * ud.scale * 2;
-                            pos[i * 3 + 1] = ud.origin.y;
-                            pos[i * 3 + 2] = ud.origin.z + (Math.random() - 0.5) * ud.scale * 2;
-                            ud.lifetimes[i] = 0;
-                        } else {
-                            var v = ud.velocities[i];
-                            pos[i * 3] += v.x * dt * 0.4; pos[i * 3 + 1] += v.y * dt * 0.6; pos[i * 3 + 2] += v.z * dt * 0.4;
-                        }
-                    } else { // smoke
-                        if (lf > 2) {
-                            pos[i * 3] = ud.origin.x + (Math.random() - 0.5) * ud.scale;
-                            pos[i * 3 + 1] = ud.origin.y;
-                            pos[i * 3 + 2] = ud.origin.z + (Math.random() - 0.5) * ud.scale;
-                            ud.lifetimes[i] = 0;
-                        } else {
-                            var v = ud.velocities[i];
-                            pos[i * 3] += v.x * dt * 0.5; pos[i * 3 + 1] += v.y * dt * 0.3; pos[i * 3 + 2] += v.z * dt * 0.5;
-                        }
-                    }
-                }
-                ps.geometry.attributes.position.needsUpdate = true;
-                ps.material.opacity = ud.type === 'smoke' ? 0.4 * fade : ud.type === 'explosion' ? fade : 0.85;
-                if (ud.type === 'fire') ps.material.size = ud.scale * 0.8 * (0.6 + Math.sin(ud.age * 8) * 0.4);
-            }
-        }
-
-        // ═══════════════════════════════════════════════════
-        // BUILDING COLLAPSE
-        // ═══════════════════════════════════════════════════
-        var collapseList = [];
-
-        function triggerCollapse(bData) {
-            if (bData.collapsed) return;
-            bData.collapsed = true; bData.burning = true;
-            bData.collapseT = 0;
-            bData.collapseDir = new THREE.Vector3((Math.random() - 0.5) * 0.5, 0, (Math.random() - 0.5) * 0.5).normalize();
-            collapseList.push(bData);
-
-            // Tint red/orange
-            bData.mesh.material = new THREE.MeshLambertMaterial({ color: 0x331100, emissive: 0xff2200, emissiveIntensity: 0.4 });
-        }
-
-        function updateCollapses(dt) {
-            collapseList.forEach(bd => {
-                if (bd.collapseT > 3) return;
-                bd.collapseT += dt;
-                var t = Math.min(bd.collapseT / 2.5, 1);
-                // Sink into ground + tilt
-                bd.mesh.position.y = bd.origY * (1 - t * t);
-                bd.mesh.rotation.x = bd.collapseDir.z * t * 0.6;
-                bd.mesh.rotation.z = bd.collapseDir.x * t * 0.6;
-                bd.mesh.scale.y = 1 - t * 0.7;
-                // Flicker emissive
-                if (bd.mesh.material.emissiveIntensity !== undefined)
-                    bd.mesh.material.emissiveIntensity = 0.4 + Math.sin(bd.collapseT * 20) * 0.3;
-            });
-        }
-
-        // ═══════════════════════════════════════════════════
-        // PATH MATH (same as 2D version, now in 3D)
-        // ═══════════════════════════════════════════════════
-        function bezier3(p0, cp, p2, steps) {
-            var pts = [];
-            for (var i = 0; i <= steps; i++) {
-                var t = i / steps;
-                pts.push(new THREE.Vector3(
-                    (1 - t) * (1 - t) * p0.x + 2 * (1 - t) * t * cp.x + t * t * p2.x,
-                    (1 - t) * (1 - t) * p0.y + 2 * (1 - t) * t * cp.y + t * t * p2.y,
-                    (1 - t) * (1 - t) * p0.z + 2 * (1 - t) * t * cp.z + t * t * p2.z
-                ));
-            }
-            return pts;
-        }
-
-        function cpPerp3(a, b, f, hVariance) {
-            var mid = new THREE.Vector3().addVectors(a, b).multiplyScalar(0.5);
-            var dir = new THREE.Vector3().subVectors(b, a);
-            var perp = new THREE.Vector3(-dir.z, 0, dir.x).normalize();
-            mid.addScaledVector(perp, f * dir.length());
-            mid.y += hVariance;
-            return mid;
-        }
-
-        function cumDist3(pts) {
-            var d = [0];
-            for (var i = 1; i < pts.length; i++) d.push(d[i - 1] + pts[i - 1].distanceTo(pts[i]));
-            return d;
-        }
-
-        function interpPath3(pts, cd, dist) {
-            if (dist <= 0) return pts[0].clone();
-            if (dist >= cd[cd.length - 1]) return pts[pts.length - 1].clone();
-            var lo = 0, hi = cd.length - 1;
-            while (lo < hi - 1) { var m = (lo + hi) >> 1; if (cd[m] <= dist) lo = m; else hi = m; }
-            var t = (dist - cd[lo]) / (cd[hi] - cd[lo]);
-            return pts[lo].clone().lerp(pts[hi], t);
-        }
-
-        // ═══════════════════════════════════════════════════
-        // MISSION STATE
-        // ═══════════════════════════════════════════════════
-        var droneObjects = [];  // {model, pts, cd, totD, prog, done, color, trailLine, ...}
-        var pathLines = [];
-        var simRunning = false;
-        var simStartTime = 0;
-        var clock = new THREE.Clock();
-
-        // Target = center of city
-        var TARGET = new THREE.Vector3(0, 0, 0);
-        var TAKEOFF_POS = new THREE.Vector3(-700, 0, 700);
-
-        // Trail geometry helper
-        function makeTrailLine(color) {
-            var mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.75, linewidth: 1 });
-            var geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0)]);
-            var line = new THREE.Line(geo, mat);
-            scene.add(line);
-            return line;
-        }
-
-        function updateTrailLine(line, pts) {
-            if (pts.length < 2) return;
-            line.geometry.dispose();
-            line.geometry = new THREE.BufferGeometry().setFromPoints(pts);
-        }
-
-        // Ghost path line
-        function makePathLine(pts, color, dash) {
-            var mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: dash ? 0.2 : 0.45, linewidth: 1 });
-            var geo = new THREE.BufferGeometry().setFromPoints(pts);
-            var line = new THREE.Line(geo, mat);
-            scene.add(line);
-            pathLines.push(line);
-            return line;
-        }
-
-        var DRONE_COLORS = ['#00ff88', '#00ccff', '#ffaa00', '#ff4488', '#aa88ff', '#ff6600', '#44ffcc', '#ffff00', '#ff2222', '#88ff44', '#cc44ff', '#00ffff'];
-
-        function buildMission() {
-            // Clear old drones + paths
-            droneObjects.forEach(d => { scene.remove(d.model); scene.remove(d.trailLine); });
-            pathLines.forEach(l => scene.remove(l));
-            droneObjects = []; pathLines = [];
-            collapseList = [];
-
-            var n = parseInt(document.getElementById('nDrones').value);
-            var speed = parseFloat(document.getElementById('speedVal').value);
-            var alt = parseFloat(document.getElementById('altVal').value);
-            var radius = parseFloat(document.getElementById('radVal').value);
-            var pattern = document.getElementById('pattern').value;
-
-            var tcards = document.getElementById('tcards');
-            tcards.innerHTML = '';
-
-            for (var i = 0; i < n; i++) {
-                var color = DRONE_COLORS[i % DRONE_COLORS.length];
-                var col = new THREE.Color(color);
-
-                // Attack angle
-                var angleDeg;
-                if (pattern === 'radial') angleDeg = (360 / n) * i;
-                else if (pattern === 'spiral') angleDeg = ((360 / n) * i + i * 22) % 360;
-                else {
-                    var half = Math.ceil(n / 2);
-                    angleDeg = i < half ? 15 + (150 / (half - 1 || 1)) * i : 195 + (150 / (Math.floor(n / 2) - 1 || 1)) * (i - half);
-                }
-                var rad = angleDeg * Math.PI / 180;
-
-                // Staging position (on radius ring around target, at altitude)
-                var staging = new THREE.Vector3(
-                    TARGET.x + radius * Math.sin(rad),
-                    alt,
-                    TARGET.z + radius * Math.cos(rad)
-                );
-
-                // Takeoff (spread around base)
-                var tkAngle = (Math.PI * 1.25 + (i / n) * Math.PI * 0.5);
-                var tkDist = 600 + Math.random() * 200;
-                var tk = new THREE.Vector3(
-                    TAKEOFF_POS.x + (Math.random() - 0.5) * 150,
-                    10,
-                    TAKEOFF_POS.z + (Math.random() - 0.5) * 150
-                );
-
-                // Arc factor per drone — alternating and varied
-                var arcF = (i % 2 === 0 ? 1 : -1) * 0.35 * (1 + i * 0.06);
-
-                // Build path: TK → climb → staging → attack dive to target
-                var climbPt = new THREE.Vector3(tk.x, alt * 0.5, tk.z);
-                var cp1 = cpPerp3(tk, staging, arcF, alt * 0.3);
-                var cruisePts = bezier3(tk, cp1, staging, 50);
-
-                // Final attack arc — VERY pronounced curve (tight approach)
-                var attackCP = cpPerp3(staging, new THREE.Vector3(TARGET.x, alt * 0.15, TARGET.z), arcF * 0.9, alt * 0.2);
-                var attackPts = bezier3(staging, attackCP, new THREE.Vector3(TARGET.x + (Math.random() - 0.5) * 10, 5, TARGET.z + (Math.random() - 0.5) * 10), 30);
-
-                var allPts = [...cruisePts, ...attackPts.slice(1)];
-                var cd = cumDist3(allPts);
-                var totD = cd[cd.length - 1];
-                var stagingIdx = cruisePts.length - 1;
-
-                var speedAttack = speed * 1.5;
-                var distCruise = cd[stagingIdx];
-                var timeTotal = distCruise / speed + (totD - distCruise) / speedAttack;
-                var distHolding = tk.distanceTo(staging);
-
-                // Ghost path lines
-                makePathLine(cruisePts, col, true);
-                makePathLine(attackPts, col, false);
-
-                // Drone 3D model
-                var model = makeDroneModel(color);
-                model.position.copy(tk);
-                model.scale.setScalar(2.5);
-                scene.add(model);
-
-                // Trail
-                var trail = makeTrailLine(col);
-
-                droneObjects.push({
-                    i, color, col, model, trail, pts: allPts, cd, totD, stagingIdx,
-                    speedBase: speed, speedAttack, timeTotal, distHolding,
-                    prog: 0, done: false, trailBuf: [],
-                    fireSys: null, smokeSys: null,
-                });
-
-                // Telemetry card
-                var card = document.createElement('div');
-                card.className = 'tcard'; card.id = 'tc-' + i;
-                card.innerHTML = `
-      <div class="tc-head">
-        <span class="tc-id" style="color:${color}">DRON-${String(i + 1).padStart(2, '0')}</span>
-        <span class="tc-st ready" id="ts-${i}">LISTO</span>
+  </div>
+</div>
+
+<div id="logbox"></div>
+<div id="hud">T+ 00:00  |  EN VUELO: 0</div>
+<div id="modetip">SELECCIONAR EN MAPA</div>
+<div id="camhint">CLICK IZQ: rotar · SCROLL: zoom<br>CLICK DER: paneo · DOBLE CLICK: volar a</div>
+
+<script>
+// ═══════════════════════════════════════════════════
+//  CESIUM — token real + satélite HD + edificios OSM
+// ═══════════════════════════════════════════════════
+Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI5Nzk2NjhmMi0yOWRiLTRjYjQtYmRkMi02NjY5YzA5NjEzYzciLCJpZCI6NDA3MzcwLCJpYXQiOjE3NzQxNzYyNTZ9.sKTe7HFWrgU65NBtKlmJVz5A8fFsVWvBj53Nw5doM4Q';
+
+var viewer = new Cesium.Viewer('cesiumContainer', {
+  baseLayerPicker:       false,
+  geocoder:              false,
+  homeButton:            false,
+  sceneModePicker:       false,
+  navigationHelpButton:  false,
+  animation:             false,
+  timeline:              false,
+  fullscreenButton:      false,
+  infoBox:               false,
+  selectionIndicator:    false,
+  shadows:               false,
+  skyBox:                false,
+  skyAtmosphere:         new Cesium.SkyAtmosphere()
+});
+
+// ── Satélite HD desde Cesium Ion (Bing Maps Aerial) ──
+viewer.scene.imageryLayers.removeAll();
+viewer.scene.imageryLayers.addImageryProvider(
+  new Cesium.IonImageryProvider({ assetId: 2 })  // Bing Maps Aerial HD
+);
+
+// ── Edificios OSM 3D reales ──
+Cesium.Cesium3DTileset.fromIonAssetId(96188).then(function(tileset){
+  viewer.scene.primitives.add(tileset);
+  tileset.style = new Cesium.Cesium3DTileStyle({
+    color : "color('rgb(200,190,175)', 1.0)"  // color natural de edificios
+  });
+  log('Edificios OSM 3D cargados','w');
+}).catch(function(e){
+  log('Edificios 3D: error — '+e.message,'e');
+});
+
+// ── Cámara inicial — Madrid Gran Vía ──
+viewer.camera.setView({
+  destination: Cesium.Cartesian3.fromDegrees(-3.7038, 40.4168, 2200),
+  orientation:{
+    heading: Cesium.Math.toRadians(-10),
+    pitch:   Cesium.Math.toRadians(-38),
+    roll:    0
+  }
+});
+
+// ═══════════════════════════════════════════════════
+//  COLORES Y ESTADO
+// ═══════════════════════════════════════════════════
+var COLORS=['#00ff88','#00ccff','#ffaa00','#ff4488','#aa88ff',
+            '#ff6600','#44ffcc','#ffff00','#ff3333','#88ff44','#cc44ff','#00ffff'];
+
+var pts    = {takeoff:null,target:null,holding:null};
+var pinEnt = {takeoff:null,target:null,holding:null};
+var selMode= null;
+
+var droneEnts  = [];
+var droneState = [];
+var pathEnts   = [];
+var fxEnts     = [];
+
+var simRunning  = false;
+var simLastTime = null;
+var simStartTime= null;
+var animFrame   = null;
+
+// ─── Click en globo ──────────────────────────────
+var tipEl = document.getElementById('modetip');
+
+function activar(tipo){
+  selMode=tipo;
+  document.querySelectorAll('.btac').forEach(b=>b.classList.remove('active'));
+  document.getElementById({takeoff:'btnTK',target:'btnTG',holding:'btnHD'}[tipo]).classList.add('active');
+  tipEl.style.display='block';
+  tipEl.textContent='CLICK EN EL GLOBO → '+tipo.toUpperCase();
+  viewer.canvas.style.cursor='crosshair';
+}
+
+var clickHandler=new Cesium.ScreenSpaceEventHandler(viewer.canvas);
+clickHandler.setInputAction(function(e){
+  if(!selMode) return;
+  var ray=viewer.camera.getPickRay(e.position);
+  var cartesian=viewer.scene.globe.pick(ray,viewer.scene);
+  if(!cartesian){
+    cartesian=viewer.camera.pickEllipsoid(e.position,viewer.scene.globe.ellipsoid);
+  }
+  if(!cartesian) return;
+
+  var carto=Cesium.Cartographic.fromCartesian(cartesian);
+  var lng=Cesium.Math.toDegrees(carto.longitude);
+  var lat=Cesium.Math.toDegrees(carto.latitude);
+  pts[selMode]=[lng,lat];
+
+  if(pinEnt[selMode]) viewer.entities.remove(pinEnt[selMode]);
+
+  var col={takeoff:'#00ff88',target:'#ff3333',holding:'#ffaa00'}[selMode];
+  var lbl={takeoff:'▲ TAKEOFF',target:'✕ OBJETIVO',holding:'◆ ESPERA'}[selMode];
+  var sz ={takeoff:14,target:20,holding:12}[selMode];
+
+  pinEnt[selMode]=viewer.entities.add({
+    position: Cesium.Cartesian3.fromDegrees(lng,lat,10),
+    point:{
+      pixelSize: sz,
+      color: Cesium.Color.fromCssColorString(col),
+      outlineColor: Cesium.Color.BLACK,
+      outlineWidth: 2,
+      heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
+      disableDepthTestDistance: Number.POSITIVE_INFINITY
+    },
+    label:{
+      text: lbl,
+      font: '11px Share Tech Mono',
+      fillColor: Cesium.Color.fromCssColorString(col),
+      outlineColor: Cesium.Color.BLACK,
+      outlineWidth: 2,
+      style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+      verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+      pixelOffset: new Cesium.Cartesian2(0,-18),
+      disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND
+    }
+  });
+
+  document.getElementById({takeoff:'stk',target:'stg',holding:'shd'}[selMode]).textContent='✔';
+  log('Punto '+selMode.toUpperCase()+': '+lat.toFixed(5)+', '+lng.toFixed(5));
+
+  selMode=null;
+  document.querySelectorAll('.btac').forEach(b=>b.classList.remove('active'));
+  tipEl.style.display='none';
+  viewer.canvas.style.cursor='';
+
+  if(pts.takeoff&&pts.target) document.getElementById('btnCalc').disabled=false;
+},Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+// ═══════════════════════════════════════════════════
+//  GEO MATH
+// ═══════════════════════════════════════════════════
+function haversine(a,b){
+  var R=6371000,dLa=(b[1]-a[1])*Math.PI/180,dLo=(b[0]-a[0])*Math.PI/180;
+  var s=Math.sin(dLa/2)**2+Math.cos(a[1]*Math.PI/180)*Math.cos(b[1]*Math.PI/180)*Math.sin(dLo/2)**2;
+  return R*2*Math.atan2(Math.sqrt(s),Math.sqrt(1-s));
+}
+function geoBearing(a,b){
+  var dL=(b[0]-a[0])*Math.PI/180;
+  var y=Math.sin(dL)*Math.cos(b[1]*Math.PI/180);
+  var x=Math.cos(a[1]*Math.PI/180)*Math.sin(b[1]*Math.PI/180)-Math.sin(a[1]*Math.PI/180)*Math.cos(b[1]*Math.PI/180)*Math.cos(dL);
+  return(Math.atan2(y,x)*180/Math.PI+360)%360;
+}
+function offsetGeo(lng,lat,distM,brngDeg){
+  var R=6371000,b=brngDeg*Math.PI/180,la=lat*Math.PI/180,lo=lng*Math.PI/180;
+  var la2=Math.asin(Math.sin(la)*Math.cos(distM/R)+Math.cos(la)*Math.sin(distM/R)*Math.cos(b));
+  var lo2=lo+Math.atan2(Math.sin(b)*Math.sin(distM/R)*Math.cos(la),Math.cos(distM/R)-Math.sin(la)*Math.sin(la2));
+  return[lo2*180/Math.PI,la2*180/Math.PI];
+}
+function bezierGeo(p0,cp,p2,steps){
+  var out=[];
+  for(var i=0;i<=steps;i++){
+    var t=i/steps;
+    out.push([(1-t)*(1-t)*p0[0]+2*(1-t)*t*cp[0]+t*t*p2[0],
+              (1-t)*(1-t)*p0[1]+2*(1-t)*t*cp[1]+t*t*p2[1]]);
+  }
+  return out;
+}
+function cpPerpGeo(a,b,f){
+  var mid=[(a[0]+b[0])/2,(a[1]+b[1])/2];
+  return[mid[0]-(b[1]-a[1])*f, mid[1]+(b[0]-a[0])*f];
+}
+function cumDistGeo(pts){
+  var d=[0];
+  for(var i=1;i<pts.length;i++) d.push(d[i-1]+haversine(pts[i-1],pts[i]));
+  return d;
+}
+function interpPathGeo(pts,cd,dist){
+  if(dist<=0) return pts[0].slice();
+  if(dist>=cd[cd.length-1]) return pts[pts.length-1].slice();
+  var lo=0,hi=cd.length-1;
+  while(lo<hi-1){var m=(lo+hi)>>1;if(cd[m]<=dist)lo=m;else hi=m;}
+  var t=(dist-cd[lo])/(cd[hi]-cd[lo]);
+  return[pts[lo][0]+(pts[hi][0]-pts[lo][0])*t,pts[lo][1]+(pts[hi][1]-pts[lo][1])*t];
+}
+function interpCart(pts,cd,dist){
+  var geo=interpPathGeo(pts.geo,cd,dist);
+  // altitude: cruise at alt, dive on last 25%
+  var frac=dist/cd[cd.length-1];
+  var stagFrac=pts.stagFrac||0.75;
+  var altM=pts.alt;
+  if(frac>stagFrac){
+    var t2=(frac-stagFrac)/(1-stagFrac);
+    altM=pts.alt*(1-0.6*t2*t2);
+  }
+  return Cesium.Cartesian3.fromDegrees(geo[0],geo[1],Math.max(altM,8));
+}
+
+// ═══════════════════════════════════════════════════
+//  DRONE SVG BILLBOARD
+// ═══════════════════════════════════════════════════
+function droneSVG(color){
+  var s=`<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'>
+    <line x1='20' y1='20' x2='7'  y2='7'  stroke='${color}' stroke-width='2.2'/>
+    <line x1='20' y1='20' x2='33' y2='7'  stroke='${color}' stroke-width='2.2'/>
+    <line x1='20' y1='20' x2='7'  y2='33' stroke='${color}' stroke-width='2.2'/>
+    <line x1='20' y1='20' x2='33' y2='33' stroke='${color}' stroke-width='2.2'/>
+    <circle cx='7'  cy='7'  r='5.5' fill='none' stroke='${color}' stroke-width='1.8'/>
+    <circle cx='33' cy='7'  r='5.5' fill='none' stroke='${color}' stroke-width='1.8'/>
+    <circle cx='7'  cy='33' r='5.5' fill='none' stroke='${color}' stroke-width='1.8'/>
+    <circle cx='33' cy='33' r='5.5' fill='none' stroke='${color}' stroke-width='1.8'/>
+    <line x1='3'  y1='7'  x2='11' y2='7'  stroke='${color}' stroke-width='1.2' opacity='0.6'/>
+    <line x1='7'  y1='3'  x2='7'  y2='11' stroke='${color}' stroke-width='1.2' opacity='0.6'/>
+    <line x1='29' y1='7'  x2='37' y2='7'  stroke='${color}' stroke-width='1.2' opacity='0.6'/>
+    <line x1='33' y1='3'  x2='33' y2='11' stroke='${color}' stroke-width='1.2' opacity='0.6'/>
+    <line x1='3'  y1='33' x2='11' y2='33' stroke='${color}' stroke-width='1.2' opacity='0.6'/>
+    <line x1='7'  y1='29' x2='7'  y2='37' stroke='${color}' stroke-width='1.2' opacity='0.6'/>
+    <line x1='29' y1='33' x2='37' y2='33' stroke='${color}' stroke-width='1.2' opacity='0.6'/>
+    <line x1='33' y1='29' x2='33' y2='37' stroke='${color}' stroke-width='1.2' opacity='0.6'/>
+    <rect x='16' y='16' width='8' height='8' rx='1.5' fill='${color}'/>
+    <circle cx='20' cy='20' r='2' fill='rgba(0,0,0,0.7)'/>
+    <line x1='20' y1='2' x2='20' y2='8' stroke='${color}' stroke-width='2'/>
+    <!-- glow ring -->
+    <circle cx='20' cy='20' r='18' fill='none' stroke='${color}' stroke-width='0.5' opacity='0.2'/>
+  </svg>`;
+  return 'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(s);
+}
+
+// ═══════════════════════════════════════════════════
+//  CALCULAR MISIÓN
+// ═══════════════════════════════════════════════════
+function calcular(){
+  if(!pts.takeoff||!pts.target){log('Define Takeoff y Objetivo','e');return;}
+  detener();
+  clearPaths();
+  droneEnts.forEach(d=>viewer.entities.remove(d.entity));
+  droneEnts=[]; droneState=[];
+
+  var n    =parseInt(document.getElementById('nDr').value);
+  var spd  =parseFloat(document.getElementById('spd').value);
+  var alt  =parseFloat(document.getElementById('alt').value);
+  var rad  =parseFloat(document.getElementById('rad').value);
+  var curv =parseFloat(document.getElementById('curv').value);
+  var pat  =document.getElementById('pat').value;
+
+  var tk =pts.takeoff, tgt=pts.target, hld=pts.holding;
+  document.getElementById('tcards').innerHTML='';
+
+  for(var i=0;i<n;i++){
+    var hex=COLORS[i%COLORS.length];
+    var cesCol=Cesium.Color.fromCssColorString(hex);
+
+    // Ángulo de ataque
+    var angleDeg;
+    if(pat==='radial')      angleDeg=(360/n)*i;
+    else if(pat==='spiral') angleDeg=((360/n)*i+i*22)%360;
+    else{
+      var half=Math.ceil(n/2);
+      angleDeg=i<half?15+(150/(half-1||1))*i:195+(150/(Math.floor(n/2)-1||1))*(i-half);
+    }
+
+    var staging=offsetGeo(tgt[0],tgt[1],rad,angleDeg);
+    var holdPos=hld?offsetGeo(hld[0],hld[1],80+i*15,(360/n)*i):null;
+
+    var arcF=(i%2===0?1:-1)*curv*(1+i*0.05);
+
+    // Rutas Bézier
+    var cruisePts;
+    if(holdPos){
+      cruisePts=[
+        ...bezierGeo(tk,cpPerpGeo(tk,holdPos,arcF*0.5),holdPos,30),
+        ...bezierGeo(holdPos,cpPerpGeo(holdPos,staging,arcF*0.4),staging,30).slice(1)
+      ];
+    } else {
+      cruisePts=bezierGeo(tk,cpPerpGeo(tk,staging,arcF*0.55),staging,50);
+    }
+
+    // Arco de ataque final — muy pronunciado
+    var cpAtk=cpPerpGeo(staging,tgt,arcF*curv*0.85);
+    var attackPts=bezierGeo(staging,cpAtk,tgt,40);
+
+    var allGeo=[...cruisePts,...attackPts.slice(1)];
+    var cd=cumDistGeo(allGeo);
+    var totD=cd[cd.length-1];
+    var stagIdx=cruisePts.length-1;
+    var stagFrac=cd[stagIdx]/totD;
+
+    var spdAtk=spd*1.5;
+    var timeTotal=cd[stagIdx]/spd+(totD-cd[stagIdx])/spdAtk;
+
+    // Convertir a Cartesian3 con altitud
+    var cartPath=allGeo.map((p,j)=>{
+      var frac=j/(allGeo.length-1);
+      var a=frac>stagFrac ? alt*(1-0.6*Math.pow((frac-stagFrac)/(1-stagFrac),2)) : alt;
+      return Cesium.Cartesian3.fromDegrees(p[0],p[1],Math.max(a,8));
+    });
+
+    // Línea ghost de crucero (punteada)
+    var cruiseCart=cruisePts.map(p=>Cesium.Cartesian3.fromDegrees(p[0],p[1],alt));
+    var cruiseLine=viewer.entities.add({
+      polyline:{
+        positions:cruiseCart,width:1.2,
+        material:new Cesium.PolylineDashMaterialProperty({
+          color:Cesium.Color.fromCssColorString(hex).withAlpha(0.3),dashLength:14
+        })
+      }
+    });
+
+    // Línea ataque (sólida, brillante)
+    var attackCart=attackPts.map((p,j)=>{
+      var t=j/(attackPts.length-1);
+      return Cesium.Cartesian3.fromDegrees(p[0],p[1],alt*(1-0.6*t*t));
+    });
+    var attackLine=viewer.entities.add({
+      polyline:{
+        positions:attackCart,width:2.8,
+        material:new Cesium.PolylineGlowMaterialProperty({
+          glowPower:0.2,
+          color:Cesium.Color.fromCssColorString(hex).withAlpha(0.85)
+        })
+      }
+    });
+
+    // Punto staging
+    var stagEnt=viewer.entities.add({
+      position:Cesium.Cartesian3.fromDegrees(staging[0],staging[1],alt),
+      point:{pixelSize:6,color:Cesium.Color.fromCssColorString(hex).withAlpha(0.5),
+             outlineColor:Cesium.Color.fromCssColorString(hex),outlineWidth:1,
+             disableDepthTestDistance:Number.POSITIVE_INFINITY}
+    });
+    pathEnts.push(cruiseLine,attackLine,stagEnt);
+
+    // Entidad dron
+    var droneEnt=viewer.entities.add({
+      position:Cesium.Cartesian3.fromDegrees(tk[0],tk[1],alt),
+      billboard:{
+        image:droneSVG(hex),
+        width:28,height:28,
+        eyeOffset:new Cesium.Cartesian3(0,0,-50),
+        disableDepthTestDistance:Number.POSITIVE_INFINITY,
+        verticalOrigin:Cesium.VerticalOrigin.CENTER,
+        rotation:0
+      },
+      polyline:{
+        positions:new Cesium.CallbackProperty(()=>
+          droneState[i]&&droneState[i].trail.length>1
+            ? droneState[i].trail
+            : [Cesium.Cartesian3.fromDegrees(tk[0],tk[1],alt)],false),
+        width:2,
+        material:new Cesium.PolylineGlowMaterialProperty({
+          glowPower:0.1,
+          color:Cesium.Color.fromCssColorString(hex).withAlpha(0.7)
+        })
+      }
+    });
+    droneEnts.push({entity:droneEnt,hex});
+
+    droneState.push({
+      i,hex,allGeo,cartPath,cd,totD,stagIdx,stagFrac,
+      spd,spdAtk,timeTotal,alt,
+      prog:0,done:false,trail:[],entity:droneEnt
+    });
+
+    // Tarjeta telemetría
+    var card=document.createElement('div');
+    card.className='tc'; card.id='tc'+i;
+    card.innerHTML=`
+      <div class="tch">
+        <span class="tcid" style="color:${hex}">D-${String(i+1).padStart(2,'0')}</span>
+        <span class="tcst ready" id="ts${i}">LISTO</span>
       </div>
-      <div class="tc-row"><span>Distancia</span><span>${(totD / 1000).toFixed(2)} km</span></div>
-      <div class="tc-row"><span>ETA</span><span id="te-${i}">${fmtT(timeTotal)}</span></div>
-      <div class="tc-row"><span>Vel.</span><span id="tv-${i}">${speed.toFixed(0)} m/s</span></div>
-      <div class="tc-row"><span>Alt.</span><span id="ta-${i}">10 m</span></div>
-      <div class="tc-prog"><div class="tc-prog-fill" id="tp-${i}" style="background:${color};width:0%"></div></div>`;
-                tcards.appendChild(card);
-            }
+      <div class="tcr"><span>Dist.</span><span>${(totD/1000).toFixed(2)} km</span></div>
+      <div class="tcr"><span>ETA</span><span id="te${i}">${fmtT(timeTotal)}</span></div>
+      <div class="tcr"><span>Vel.</span><span id="tv${i}">${spd.toFixed(0)} m/s</span></div>
+      <div class="tcr"><span>Alt.</span><span id="ta${i}">${alt} m</span></div>
+      <div class="tcr"><span>Fase</span><span id="tf${i}">CRUCERO</span></div>
+      <div class="tcp"><div class="tcpf" id="tp${i}" style="background:${hex}"></div></div>`;
+    document.getElementById('tcards').appendChild(card);
+  }
 
-            log('Misión lista — ' + n + ' drones | ' + pattern + ' | radio ' + radius + 'm', 'w');
-            document.getElementById('btnLaunch').disabled = false;
-        }
+  // Anillo objetivo
+  var tgtRing=viewer.entities.add({
+    position:Cesium.Cartesian3.fromDegrees(tgt[0],tgt[1],5),
+    ellipse:{
+      semiMajorAxis:rad,semiMinorAxis:rad,
+      material:Cesium.Color.RED.withAlpha(0.06),
+      outline:true,outlineColor:Cesium.Color.fromCssColorString('#ff3333').withAlpha(0.6),
+      outlineWidth:2,heightReference:Cesium.HeightReference.CLAMP_TO_GROUND
+    }
+  });
+  pathEnts.push(tgtRing);
 
-        // ═══════════════════════════════════════════════════
-        // LAUNCH / RESET
-        // ═══════════════════════════════════════════════════
-        function launchMission() {
-            if (simRunning) return;
-            // Reset drone positions
-            droneObjects.forEach((d, i) => {
-                d.prog = 0; d.done = false; d.trailBuf = [];
-                d.model.position.copy(d.pts[0]);
-                d.model.visible = true;
-                d.trail.geometry.dispose();
-                d.trail.geometry = new THREE.BufferGeometry().setFromPoints([d.pts[0]]);
-                document.getElementById('ts-' + i).className = 'tc-st fly';
-                document.getElementById('ts-' + i).textContent = 'VUELO';
-                document.getElementById('tc-' + i).className = 'tcard fly';
-                document.getElementById('tp-' + i).style.width = '0%';
-            });
-            simRunning = true; simStartTime = clock.getElapsedTime();
-            document.getElementById('mission-status').textContent = '▶ MISIÓN EN CURSO';
-            log('⬡ Enjambre lanzado — ' + droneObjects.length + ' drones', 'w');
-        }
+  document.getElementById('btnLaunch').disabled=false;
+  document.getElementById('mstatus').textContent='● RUTAS CALCULADAS — '+n+' DRONES';
+  log('Rutas OK: '+n+' drones | '+pat+' | radio '+rad+'m | curv '+curv,'w');
 
-        function resetMission() {
-            simRunning = false;
-            // Reset particles
-            particleSystems.forEach(p => { scene.remove(p); p.geometry.dispose(); });
-            particleSystems.length = 0;
-            // Reset buildings
-            buildingMeshes.forEach(b => {
-                if (b.collapsed) {
-                    b.mesh.position.y = b.origY;
-                    b.mesh.rotation.set(0, 0, 0);
-                    b.mesh.scale.set(1, 1, 1);
-                    b.mesh.material = new THREE.MeshLambertMaterial({ color: BLOCK_COLORS[0] });
-                    b.collapsed = false; b.burning = false;
-                }
-            });
-            collapseList.length = 0;
-            buildMission();
-            document.getElementById('mission-status').textContent = '● STANDBY';
-            fireGlow.intensity = 0;
-        }
+  // Volar cámara para ver la misión completa
+  viewer.camera.flyTo({
+    destination:Cesium.Cartesian3.fromDegrees(tgt[0],tgt[1]-0.015,3800),
+    orientation:{heading:Cesium.Math.toRadians(0),pitch:Cesium.Math.toRadians(-42),roll:0},
+    duration:2
+  });
+}
 
-        // ═══════════════════════════════════════════════════
-        // CAMERA CONTROLS (orbit)
-        // ═══════════════════════════════════════════════════
-        var camTheta = 0.4, camPhi = 0.6, camDist = 900;
-        var camTarget = new THREE.Vector3(0, 50, 0);
-        var isDragging = false, lastMX = 0, lastMY = 0;
+// ═══════════════════════════════════════════════════
+//  SIMULACIÓN
+// ═══════════════════════════════════════════════════
+function lanzar(){
+  if(simRunning||!droneState.length) return;
 
-        document.addEventListener('mousedown', e => { isDragging = true; lastMX = e.clientX; lastMY = e.clientY; });
-        document.addEventListener('mouseup', () => isDragging = false);
-        document.addEventListener('mousemove', e => {
-            if (!isDragging) return;
-            var dx = e.clientX - lastMX, dy = e.clientY - lastMY;
-            lastMX = e.clientX; lastMY = e.clientY;
-            if (e.shiftKey) { camTarget.x -= dx * 0.5; camTarget.z -= dy * 0.5; }
-            else { camTheta -= dx * 0.005; camPhi = Math.max(0.1, Math.min(1.4, camPhi - dy * 0.005)); }
-        });
-        document.addEventListener('wheel', e => { camDist = Math.max(80, Math.min(2500, camDist + e.deltaY * 0.5)); });
+  droneState.forEach((ds,i)=>{
+    ds.prog=0; ds.done=false; ds.trail=[];
+    ds.entity.position=ds.cartPath[0];
+    ds.entity.billboard.show=true;
+    document.getElementById('ts'+i).className='tcst fly';
+    document.getElementById('ts'+i).textContent='VUELO';
+    document.getElementById('tc'+i).className='tc fly';
+    document.getElementById('tp'+i).style.width='0%';
+    document.getElementById('tf'+i).textContent='CRUCERO';
+  });
 
-        var followIdx = 0;
-        function updateCamera(dt) {
-            var mode = document.getElementById('camMode').value;
-            if (mode === 'orbit') {
-                var cx = camTarget.x + camDist * Math.sin(camPhi) * Math.sin(camTheta);
-                var cy = camTarget.y + camDist * Math.cos(camPhi);
-                var cz = camTarget.z + camDist * Math.sin(camPhi) * Math.cos(camTheta);
-                camera.position.set(cx, cy, cz);
-                camera.lookAt(camTarget);
-            } else if (mode === 'follow' && droneObjects.length) {
-                var d = droneObjects[followIdx % droneObjects.length];
-                if (d.done) { followIdx++; return; }
-                var behind = d.model.position.clone();
-                var fwd = new THREE.Vector3(0, 0, 1);
-                fwd.applyQuaternion(d.model.quaternion);
-                behind.addScaledVector(fwd, -80); behind.y += 30;
-                camera.position.lerp(behind, 0.05);
-                camera.lookAt(d.model.position);
-            } else if (mode === 'cinematic') {
-                // Slow orbit + tilt toward action
-                camTheta += dt * 0.06;
-                var cx = camTarget.x + camDist * Math.sin(camPhi) * Math.sin(camTheta);
-                var cy = camTarget.y + camDist * Math.cos(camPhi);
-                var cz = camTarget.z + camDist * Math.sin(camPhi) * Math.cos(camTheta);
-                camera.position.lerp(new THREE.Vector3(cx, cy, cz), 0.02);
-                camera.lookAt(TARGET);
-            } else if (mode === 'top') {
-                camera.position.lerp(new THREE.Vector3(TARGET.x, 900, TARGET.z + 1), 0.03);
-                camera.lookAt(TARGET);
-            }
-        }
+  simRunning=true; simLastTime=null; simStartTime=performance.now();
+  document.getElementById('hud').style.display='block';
+  document.getElementById('btnLaunch').style.display='none';
+  document.getElementById('btnStop').style.display='block';
+  document.getElementById('mstatus').textContent='▶ ATAQUE EN CURSO';
+  log('⬡ Enjambre lanzado — '+droneState.length+' drones en vuelo','w');
+  animFrame=requestAnimationFrame(simStep);
+}
 
-        // ═══════════════════════════════════════════════════
-        // MAIN LOOP
-        // ═══════════════════════════════════════════════════
-        var lastT = 0;
-        function animate() {
-            requestAnimationFrame(animate);
-            var elapsed = clock.getElapsedTime();
-            var dt = Math.min(elapsed - lastT, 0.05);
-            lastT = elapsed;
+function detener(){
+  simRunning=false;
+  if(animFrame){cancelAnimationFrame(animFrame);animFrame=null;}
+  simLastTime=null;
+  document.getElementById('hud').style.display='none';
+  document.getElementById('btnLaunch').style.display='block';
+  document.getElementById('btnStop').style.display='none';
+}
 
-            var simFactor = parseFloat(document.getElementById('simSpeed').value);
-            var simDt = dt * simFactor;
+function simStep(ts){
+  if(!simRunning) return;
+  animFrame=requestAnimationFrame(simStep);
 
-            // Rotor spin on all drones
-            droneObjects.forEach(d => {
-                if (d.done) return;
-                d.model.traverse(c => { if (c.userData.isRotor) c.rotation.y += simDt * 15; });
-            });
+  if(!simLastTime) simLastTime=ts;
+  var dtReal=Math.min((ts-simLastTime)/1000,0.05);
+  simLastTime=ts;
+  var sf=parseFloat(document.getElementById('simspd').value);
+  var dt=dtReal*sf;
 
-            // Simulation
-            if (simRunning) {
-                var simElapsed = (elapsed - simStartTime) * simFactor;
-                var inFlight = 0, allDone = true;
-                var totalFireIntensity = 0;
+  var inFlight=0,allDone=true;
 
-                droneObjects.forEach((d, i) => {
-                    if (d.done) return;
-                    allDone = false; inFlight++;
+  droneState.forEach((ds,i)=>{
+    if(ds.done) return;
+    allDone=false; inFlight++;
 
-                    var stagingDist = d.cd[d.stagingIdx];
-                    var curSpeed = d.prog < stagingDist ? d.speedBase : d.speedBase + (d.speedAttack - d.speedBase) * Math.min((d.prog - stagingDist) / (d.totD - stagingDist), 1) ** 2;
+    var stagDist=ds.cd[ds.stagIdx];
+    var isAtk=ds.prog>=stagDist;
+    var phase=isAtk?(ds.prog-stagDist)/(ds.totD-stagDist):0;
+    var curSpd=isAtk
+      ? ds.spd+(ds.spdAtk-ds.spd)*Math.min(phase,1)**2
+      : ds.spd;
 
-                    d.prog = Math.min(d.prog + curSpeed * simDt, d.totD);
+    ds.prog=Math.min(ds.prog+curSpd*dt,ds.totD);
 
-                    var pos = interpPath3(d.pts, d.cd, d.prog);
-                    var posNext = interpPath3(d.pts, d.cd, Math.min(d.prog + 15, d.totD));
+    // Posición interpolada en el path Cartesian3
+    var lo=0,hi=ds.cd.length-1;
+    while(lo<hi-1){var m=(lo+hi)>>1;if(ds.cd[m]<=ds.prog)lo=m;else hi=m;}
+    var t2=(ds.prog-ds.cd[lo])/(ds.cd[hi]-ds.cd[lo]);
+    var pos=Cesium.Cartesian3.lerp(ds.cartPath[lo],ds.cartPath[hi],t2,new Cesium.Cartesian3());
 
-                    d.model.position.copy(pos);
-                    // Orient toward movement
-                    if (pos.distanceTo(posNext) > 0.1) {
-                        var dir = posNext.clone().sub(pos).normalize();
-                        var targetQ = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
-                        d.model.quaternion.slerp(targetQ, 0.15);
-                    }
+    ds.entity.position=pos;
 
-                    // Trail
-                    d.trailBuf.push(pos.clone());
-                    if (d.trailBuf.length > 40) d.trailBuf.shift();
-                    updateTrailLine(d.trail, d.trailBuf);
+    // Heading → rotar billboard
+    var posGeo=interpPathGeo(ds.allGeo,ds.cd,ds.prog);
+    var posGeoN=interpPathGeo(ds.allGeo,ds.cd,Math.min(ds.prog+20,ds.totD));
+    var hdg=geoBearing(posGeo,posGeoN);
+    ds.entity.billboard.rotation=-Cesium.Math.toRadians(hdg);
 
-                    // Card update
-                    var pct = (d.prog / d.totD) * 100;
-                    var rem = Math.max(0, (d.totD - d.prog) / curSpeed);
-                    document.getElementById('tp-' + i).style.width = pct.toFixed(1) + '%';
-                    document.getElementById('tv-' + i).textContent = curSpeed.toFixed(0) + ' m/s';
-                    document.getElementById('te-' + i).textContent = fmtT(rem);
-                    document.getElementById('ta-' + i).textContent = Math.round(pos.y) + ' m';
+    // Trail — últimos 50 puntos
+    ds.trail.push(pos.clone());
+    if(ds.trail.length>50) ds.trail.shift();
 
-                    // Impact
-                    if (d.prog >= d.totD) {
-                        d.done = true;
-                        d.model.visible = false;
+    // Altura actual
+    var carto=Cesium.Cartographic.fromCartesian(pos);
+    var altNow=Math.round(Cesium.Math.toDegrees(carto.latitude)*0+carto.height);
 
-                        // Find nearest building
-                        var impactPos = d.pts[d.pts.length - 1].clone();
-                        impactPos.y = 2;
-                        createExplosion(impactPos, 25);
-                        createFireSystem(impactPos, 18);
-                        createSmokeSystem(impactPos.clone().setY(20), 20);
+    // Actualizar tarjeta
+    var pct=(ds.prog/ds.totD)*100;
+    var rem=Math.max(0,(ds.totD-ds.prog)/curSpd);
+    document.getElementById('tp'+i).style.width=pct.toFixed(1)+'%';
+    document.getElementById('tv'+i).textContent=curSpd.toFixed(0)+' m/s';
+    document.getElementById('te'+i).textContent=fmtT(rem);
+    document.getElementById('ta'+i).textContent=Math.round(carto.height)+' m';
+    document.getElementById('tf'+i).textContent=isAtk?'ATAQUE ▶':'CRUCERO';
 
-                        // Collapse nearest building
-                        var nearB = null, nearD = Infinity;
-                        buildingMeshes.forEach(b => {
-                            var dist2d = Math.sqrt((b.mesh.position.x - impactPos.x) ** 2 + (b.mesh.position.z - impactPos.z) ** 2);
-                            if (dist2d < nearD && !b.collapsed) { nearD = dist2d; nearB = b; }
-                        });
-                        if (nearB && nearD < 120) triggerCollapse(nearB);
+    // IMPACTO
+    if(ds.prog>=ds.totD){
+      ds.done=true;
+      ds.entity.billboard.show=false;
+      impactEffect(ds.allGeo[ds.allGeo.length-1],ds.hex);
+      document.getElementById('ts'+i).className='tcst hit';
+      document.getElementById('ts'+i).textContent='IMPACTO';
+      document.getElementById('tc'+i).className='tc hit';
+      document.getElementById('tp'+i).style.width='100%';
+      document.getElementById('tf'+i).textContent='IMPACTO ✕';
+      document.getElementById('te'+i).textContent='0s';
+      log('DRON-'+String(i+1).padStart(2,'0')+' — IMPACTO CONFIRMADO','e');
+    }
+  });
 
-                        fireGlow.position.copy(impactPos);
-                        totalFireIntensity += 3;
+  // HUD timer
+  var elapsed=(performance.now()-simStartTime)/1000*sf;
+  var eM=Math.floor(elapsed/60),eS=Math.floor(elapsed%60);
+  document.getElementById('hud').textContent=
+    'T+ '+String(eM).padStart(2,'0')+':'+String(eS).padStart(2,'0')+
+    '  |  EN VUELO: '+inFlight+'/'+droneState.length;
 
-                        document.getElementById('ts-' + i).className = 'tc-st hit';
-                        document.getElementById('ts-' + i).textContent = 'IMPACTO';
-                        document.getElementById('tc-' + i).className = 'tcard hit';
-                        document.getElementById('tp-' + i).style.width = '100%';
-                        log('DRON-' + String(i + 1).padStart(2, '0') + ' — IMPACTO CONFIRMADO', 'e');
-                    }
-                });
+  if(allDone){
+    simRunning=false;
+    document.getElementById('hud').textContent='■ OBJETIVO ELIMINADO — MISIÓN COMPLETADA';
+    document.getElementById('mstatus').textContent='■ MISIÓN COMPLETADA';
+    document.getElementById('btnLaunch').style.display='block';
+    document.getElementById('btnStop').style.display='none';
+    log('Misión completada — todos los impactos confirmados','w');
+  }
+}
 
-                // Fire glow pulsing
-                var fi = totalFireIntensity;
-                particleSystems.forEach(ps => { if (ps.userData.type === 'fire' || ps.userData.type === 'explosion') fi += 1; });
-                fireGlow.intensity = THREE.MathUtils.lerp(fireGlow.intensity, Math.min(fi * 0.8, 8), 0.05);
-                fireGlow.color.set(0xff3300);
+// ═══════════════════════════════════════════════════
+//  EFECTO DE IMPACTO — explosión real en la ciudad
+// ═══════════════════════════════════════════════════
+function impactEffect(lngLat,hex){
+  var pos3=Cesium.Cartesian3.fromDegrees(lngLat[0],lngLat[1],5);
 
-                // HUD
-                var eM = Math.floor(simElapsed / 60), eS = Math.floor(simElapsed % 60);
-                document.getElementById('mission-status').textContent = '▶ T+ ' + String(eM).padStart(2, '0') + ':' + String(eS).padStart(2, '0') + '  EN VUELO: ' + inFlight;
+  // Flash central naranja
+  var flash=viewer.entities.add({
+    position:pos3,
+    point:{
+      pixelSize:36,
+      color:Cesium.Color.fromCssColorString('#ff8800').withAlpha(0.95),
+      outlineColor:Cesium.Color.fromCssColorString('#ffdd00'),
+      outlineWidth:4,
+      disableDepthTestDistance:Number.POSITIVE_INFINITY
+    }
+  });
+  fxEnts.push(flash);
+  setTimeout(()=>{try{viewer.entities.remove(flash);}catch(e){}},500);
 
-                if (allDone) {
-                    simRunning = false;
-                    document.getElementById('mission-status').textContent = '■ MISIÓN COMPLETADA';
-                    log('Misión completada — todos los drones han impactado', 'w');
-                }
-            }
+  // 3 anillos que se expanden y desvanecen
+  [40,100,220].forEach((r,k)=>{
+    var ring=viewer.entities.add({
+      position:Cesium.Cartesian3.fromDegrees(lngLat[0],lngLat[1],3),
+      ellipse:{
+        semiMajorAxis:r,semiMinorAxis:r,
+        material:Cesium.Color.fromCssColorString('#ff4400').withAlpha(0.4-k*0.1),
+        outline:true,
+        outlineColor:Cesium.Color.fromCssColorString('#ff8800').withAlpha(0.9),
+        outlineWidth:3,
+        heightReference:Cesium.HeightReference.CLAMP_TO_GROUND
+      }
+    });
+    fxEnts.push(ring);
+    var t0=performance.now(), dur=1400+k*400;
+    var iv=setInterval(()=>{
+      var t=Math.min((performance.now()-t0)/dur,1);
+      var nr=r*(1+t*3);
+      try{
+        ring.ellipse.semiMajorAxis=nr;
+        ring.ellipse.semiMinorAxis=nr;
+        ring.ellipse.material=Cesium.Color.fromCssColorString('#ff4400').withAlpha((0.4-k*0.1)*(1-t));
+        ring.ellipse.outlineColor=Cesium.Color.fromCssColorString('#ff8800').withAlpha(0.9*(1-t));
+      }catch(e){}
+      if(t>=1){clearInterval(iv);try{viewer.entities.remove(ring);}catch(e){}}
+    },40);
+  });
 
-            updateParticles(simDt);
-            updateCollapses(simDt);
-            updateCamera(dt);
+  // Fuego persistente parpadeante
+  var fire=viewer.entities.add({
+    position:Cesium.Cartesian3.fromDegrees(lngLat[0],lngLat[1],4),
+    ellipse:{
+      semiMajorAxis:20,semiMinorAxis:20,
+      material:new Cesium.ColorMaterialProperty(
+        new Cesium.CallbackProperty(()=>{
+          var flicker=0.4+0.4*Math.sin(Date.now()/120+Math.random()*0.3);
+          return Cesium.Color.fromCssColorString('#ff4400').withAlpha(flicker);
+        },false)
+      ),
+      heightReference:Cesium.HeightReference.CLAMP_TO_GROUND
+    }
+  });
+  fxEnts.push(fire);
 
-            renderer.render(scene, camera);
-        }
+  // Columna de humo
+  var smoke=viewer.entities.add({
+    position:Cesium.Cartesian3.fromDegrees(lngLat[0],lngLat[1],80),
+    cylinder:{
+      length:160,
+      topRadius:40,
+      bottomRadius:5,
+      material:Cesium.Color.fromCssColorString('#332222').withAlpha(0.5),
+      outline:false
+    }
+  });
+  fxEnts.push(smoke);
+}
 
-        // ═══════════════════════════════════════════════════
-        // LOG / UTILS
-        // ═══════════════════════════════════════════════════
-        function log(msg, type) {
-            var el = document.getElementById('log');
-            var d = document.createElement('div');
-            d.className = 'll' + (type ? ' ' + type : '');
-            d.innerHTML = '<span>' + new Date().toISOString().slice(11, 19) + '</span>' + msg;
-            el.appendChild(d); el.scrollTop = el.scrollHeight;
-        }
-        function fmtT(s) {
-            if (s < 60) return Math.round(s) + 's';
-            return Math.floor(s / 60) + 'm' + String(Math.round(s % 60)).padStart(2, '0') + 's';
-        }
-        setInterval(() => { document.getElementById('clock').textContent = new Date().toISOString().slice(11, 19) + ' UTC'; }, 1000);
-        document.getElementById('simSpeed').addEventListener('input', function () { document.getElementById('simSpeedVal').textContent = this.value + '×'; });
+// ═══════════════════════════════════════════════════
+//  LIMPIAR
+// ═══════════════════════════════════════════════════
+function clearPaths(){
+  pathEnts.forEach(e=>{try{viewer.entities.remove(e);}catch(ex){}});
+  fxEnts.forEach(e=>{try{viewer.entities.remove(e);}catch(ex){}});
+  pathEnts=[]; fxEnts=[];
+}
+function limpiar(){
+  detener();
+  clearPaths();
+  droneEnts.forEach(d=>{try{viewer.entities.remove(d.entity);}catch(e){}});
+  droneEnts=[]; droneState=[];
+  Object.keys(pts).forEach(k=>{
+    pts[k]=null;
+    if(pinEnt[k]){try{viewer.entities.remove(pinEnt[k]);}catch(e){}pinEnt[k]=null;}
+    document.getElementById({takeoff:'stk',target:'stg',holding:'shd'}[k]).textContent='';
+  });
+  document.getElementById('tcards').innerHTML='<div style="color:#2a4a32;font-size:9px;letter-spacing:1px;text-align:center;padding:18px 0;line-height:2.2;">SIN DATOS<br>Define puntos<br>y calcula rutas</div>';
+  document.getElementById('btnCalc').disabled=true;
+  document.getElementById('btnLaunch').disabled=true;
+  document.getElementById('mstatus').textContent='● STANDBY — Define Takeoff y Objetivo';
+  log('Misión limpiada','w');
+}
 
-        // ─── INIT ─────────────────────────────────────────
-        regenCity();
-        buildMission();
-        animate();
-        log('Motor 3D inicializado — Three.js r128');
-        log('Arrastra para orbitar · Scroll para zoom · Shift+drag para paneo');
-    </script>
+// ═══════════════════════════════════════════════════
+//  UTILS
+// ═══════════════════════════════════════════════════
+function fmtT(s){
+  if(s<60) return Math.round(s)+'s';
+  return Math.floor(s/60)+'m'+String(Math.round(s%60)).padStart(2,'0')+'s';
+}
+setInterval(()=>{
+  document.getElementById('clk').textContent=new Date().toISOString().slice(11,19)+' UTC';
+},1000);
+document.getElementById('simspd').addEventListener('input',function(){
+  document.getElementById('simval').textContent=this.value+'×';
+});
+function log(msg,type){
+  var el=document.getElementById('logbox');
+  var d=document.createElement('div');
+  d.className='ll'+(type?' '+type:'');
+  d.innerHTML='<span>'+new Date().toISOString().slice(11,19)+'</span>'+msg;
+  el.appendChild(d); el.scrollTop=el.scrollHeight;
+}
+
+log('Cesium Ion conectado — satélite HD + edificios OSM 3D');
+log('1) TAKEOFF → 2) OBJETIVO → 3) Calcular → 4) Lanzar');
+</script>
 </body>
+</html><!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SWARM // SATELLITE STRIKE</title>
+<script src="https://cesium.com/downloads/cesiumjs/releases/1.111/Build/Cesium/Cesium.js"></script>
+<link href="https://cesium.com/downloads/cesiumjs/releases/1.111/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --g:#00ff88;--gd:#00aa55;--gk:#002a18;
+  --r:#ff3333;--a:#ffaa00;
+  --bg:#050a07;--pn:#06100a;--bd:#1a3a25;--tx:#b0d4b8;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100%;overflow:hidden;font-family:'Share Tech Mono',monospace;background:#000;}
+#cesiumContainer{position:absolute;inset:0;z-index:0;}
 
+/* Hide Cesium UI */
+.cesium-widget-credits,.cesium-credit-logoContainer,.cesium-credit-textContainer{display:none!important;}
+.cesium-viewer-toolbar,.cesium-viewer-animationContainer,.cesium-viewer-timelineContainer,.cesium-viewer-bottom{display:none!important;}
+
+/* SCANLINES */
+#scan{position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,255,136,0.006) 3px,rgba(0,255,136,0.006) 4px);pointer-events:none;z-index:10;}
+
+/* CORNERS */
+.cor{position:fixed;width:22px;height:22px;z-index:20;pointer-events:none;}
+.cor.tl{top:10px;left:10px;border-top:2px solid var(--g);border-left:2px solid var(--g);}
+.cor.tr{top:10px;right:10px;border-top:2px solid var(--g);border-right:2px solid var(--g);}
+.cor.bl{bottom:10px;left:10px;border-bottom:2px solid var(--g);border-left:2px solid var(--g);}
+.cor.br{bottom:10px;right:10px;border-bottom:2px solid var(--g);border-right:2px solid var(--g);}
+
+/* TOP BAR */
+#topbar{position:fixed;top:0;left:0;right:0;height:46px;background:linear-gradient(180deg,rgba(0,0,0,0.92) 70%,transparent);display:flex;align-items:center;justify-content:space-between;padding:0 22px;z-index:30;pointer-events:none;}
+.logo{font-family:'Orbitron',sans-serif;font-size:15px;font-weight:900;color:var(--g);letter-spacing:5px;}
+.logo span{color:var(--r);}
+#mstatus{font-size:10px;color:var(--a);letter-spacing:2px;text-align:center;}
+#clk{font-size:10px;color:var(--gd);letter-spacing:3px;}
+
+/* LEFT PANEL */
+#panel{position:fixed;top:56px;left:14px;width:238px;background:rgba(4,9,6,0.96);border:1px solid var(--bd);padding:12px;z-index:30;backdrop-filter:blur(6px);}
+.pt{font-family:'Orbitron',sans-serif;font-size:8px;letter-spacing:3px;color:var(--gd);text-transform:uppercase;margin-bottom:9px;display:flex;align-items:center;gap:5px;}
+.pt::before{content:'';width:6px;height:6px;border:1px solid var(--gd);transform:rotate(45deg);display:inline-block;flex-shrink:0;}
+
+.btac{width:100%;padding:6px 10px;margin-bottom:4px;background:transparent;border:1px solid var(--bd);color:var(--tx);font-family:'Share Tech Mono',monospace;font-size:11px;cursor:pointer;text-align:left;letter-spacing:1px;transition:all .15s;display:flex;align-items:center;gap:7px;}
+.btac:hover{border-color:var(--g);color:var(--g);background:var(--gk);}
+.btac.active{border-color:var(--g);color:var(--g);background:var(--gk);box-shadow:0 0 8px rgba(0,255,136,.2);}
+.btac .dot{width:5px;height:5px;border-radius:50%;background:var(--gd);flex-shrink:0;}
+.btac.active .dot{background:var(--g);box-shadow:0 0 4px var(--g);animation:bl 1s steps(1) infinite;}
+@keyframes bl{50%{opacity:0}}
+.btac .bk{margin-left:auto;font-size:10px;color:var(--g);}
+
+.pr{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;gap:5px;}
+.pr label{font-size:9px;color:var(--gd);letter-spacing:1px;flex:1;}
+.pr input[type=number]{width:72px;background:var(--bg);border:1px solid var(--bd);color:var(--g);font-family:'Share Tech Mono',monospace;font-size:11px;padding:3px 5px;text-align:right;outline:none;}
+.pr input:focus,.pr select:focus{border-color:var(--g);}
+.pr select{width:100px;background:var(--bg);border:1px solid var(--bd);color:var(--g);font-family:'Share Tech Mono',monospace;font-size:10px;padding:2px 4px;outline:none;}
+
+.srow{display:flex;align-items:center;gap:7px;margin-bottom:7px;}
+.srow label{font-size:9px;color:var(--gd);white-space:nowrap;}
+.srow input[type=range]{-webkit-appearance:none;flex:1;height:3px;background:var(--bd);outline:none;}
+.srow input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:var(--g);cursor:pointer;border:2px solid var(--bg);box-shadow:0 0 5px var(--g);}
+.sv{font-size:11px;color:var(--g);width:28px;text-align:right;}
+
+.ba{width:100%;padding:8px;margin-bottom:4px;border:none;font-family:'Orbitron',sans-serif;font-size:9px;letter-spacing:2px;cursor:pointer;transition:all .2s;text-transform:uppercase;}
+.bg2{background:var(--g);color:var(--bg);font-weight:700;}
+.bg2:hover{background:#00ffaa;box-shadow:0 0 16px rgba(0,255,136,.4);}
+.bo2{background:transparent;border:1px solid var(--g);color:var(--g);}
+.bo2:hover{background:var(--gk);}
+.br2{background:transparent;border:1px solid var(--r);color:var(--r);}
+.br2:hover{background:rgba(255,50,50,.07);}
+.ba:disabled{opacity:.3;cursor:not-allowed;}
+
+/* RIGHT TELEMETRY */
+#telem{position:fixed;top:56px;right:14px;width:196px;background:rgba(4,9,6,0.96);border:1px solid var(--bd);padding:10px;z-index:30;max-height:calc(100vh - 170px);overflow-y:auto;backdrop-filter:blur(6px);}
+.tc{border:1px solid var(--bd);margin-bottom:4px;padding:6px;background:var(--bg);transition:border-color .3s,box-shadow .3s;}
+.tc.fly{border-color:#00ccff;}
+.tc.hit{border-color:var(--r);box-shadow:0 0 8px rgba(255,50,50,.2);}
+.tch{display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;}
+.tcid{font-family:'Orbitron',sans-serif;font-size:9px;font-weight:700;}
+.tcst{font-size:7px;letter-spacing:1px;padding:1px 4px;border:1px solid;}
+.tcst.ready{color:var(--g);border-color:var(--g);}
+.tcst.fly{color:#00ccff;border-color:#00ccff;animation:bl .8s steps(1) infinite;}
+.tcst.hit{color:var(--r);border-color:var(--r);}
+.tcr{display:flex;justify-content:space-between;font-size:8px;color:#3a5a42;margin-bottom:1px;}
+.tcr span:last-child{color:var(--tx);}
+.tcp{height:2px;background:var(--bd);margin-top:3px;}
+.tcpf{height:100%;transition:width .08s linear;}
+
+/* LOG */
+#logbox{position:fixed;bottom:14px;left:14px;width:238px;background:rgba(4,9,6,.95);border:1px solid var(--bd);padding:6px 9px;height:72px;overflow-y:auto;font-size:8px;line-height:1.8;z-index:30;}
+.ll{color:var(--gd)}.ll.w{color:var(--a)}.ll.e{color:var(--r)}
+.ll span{color:#1a3a25;margin-right:4px;}
+
+/* HUD */
+#hud{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);z-index:30;background:rgba(4,9,6,.96);border:1px solid var(--g);padding:5px 20px;font-family:'Orbitron',sans-serif;font-size:11px;color:var(--g);letter-spacing:3px;display:none;pointer-events:none;white-space:nowrap;}
+
+/* MODE TIP */
+#modetip{position:fixed;top:56px;left:50%;transform:translateX(-50%);font-family:'Orbitron',sans-serif;font-size:10px;letter-spacing:3px;color:var(--a);z-index:40;background:rgba(4,9,6,.96);padding:4px 16px;border:1px solid var(--a);display:none;}
+
+/* CAMERA HINT */
+#camhint{position:fixed;bottom:14px;right:14px;font-size:8px;color:#2a4a32;letter-spacing:1px;z-index:30;line-height:1.9;text-align:right;pointer-events:none;}
+
+::-webkit-scrollbar{width:3px;}
+::-webkit-scrollbar-track{background:var(--bg);}
+::-webkit-scrollbar-thumb{background:var(--bd);}
+</style>
+</head>
+<body>
+
+<div id="cesiumContainer"></div>
+<div id="scan"></div>
+<div class="cor tl"></div><div class="cor tr"></div>
+<div class="cor bl"></div><div class="cor br"></div>
+
+<div id="topbar">
+  <div class="logo">SWARM <span>//</span> SATELLITE STRIKE</div>
+  <div id="mstatus">● STANDBY — Define Takeoff y Objetivo</div>
+  <div id="clk">--:--:-- UTC</div>
+</div>
+
+<div id="panel">
+  <div class="pt">Puntos de Misión</div>
+  <button class="btac" id="btnTK" onclick="activar('takeoff')"><div class="dot"></div>TAKEOFF<span class="bk" id="stk"></span></button>
+  <button class="btac" id="btnTG" onclick="activar('target')"><div class="dot"></div>OBJETIVO<span class="bk" id="stg"></span></button>
+  <button class="btac" id="btnHD" onclick="activar('holding')"><div class="dot"></div>PUNTO ESPERA<span class="bk" id="shd"></span></button>
+
+  <div class="pt" style="margin-top:8px;">Parámetros</div>
+  <div class="pr"><label>DRONES</label><input type="number" id="nDr" value="8" min="3" max="12"></div>
+  <div class="pr"><label>VELOCIDAD m/s</label><input type="number" id="spd" value="18" min="5" max="80"></div>
+  <div class="pr"><label>ALTITUD m</label><input type="number" id="alt" value="200" min="40" max="800"></div>
+  <div class="pr"><label>RADIO m</label><input type="number" id="rad" value="600" min="100" max="3000"></div>
+  <div class="pr"><label>CURVATURA</label><input type="number" id="curv" value="1.4" min="0.3" max="3.0" step="0.1"></div>
+  <div class="pr"><label>PATRÓN</label>
+    <select id="pat">
+      <option value="radial">Radial</option>
+      <option value="spiral">Espiral</option>
+      <option value="pincer">Tenaza</option>
+    </select>
+  </div>
+  <div class="srow">
+    <label>SIM ×</label>
+    <input type="range" id="simspd" min="1" max="30" step="1" value="6">
+    <span class="sv" id="simval">6×</span>
+  </div>
+
+  <div class="pt" style="margin-top:4px;">Acciones</div>
+  <button class="ba bg2" id="btnCalc"   onclick="calcular()"  disabled>▶ CALCULAR RUTAS</button>
+  <button class="ba bo2" id="btnLaunch" onclick="lanzar()"    disabled>⬡ LANZAR ATAQUE</button>
+  <button class="ba bo2" id="btnStop"   onclick="detener()"   style="display:none">■ DETENER</button>
+  <button class="ba br2"                onclick="limpiar()">✕ LIMPIAR</button>
+</div>
+
+<div id="telem">
+  <div class="pt">Telemetría</div>
+  <div id="tcards">
+    <div style="color:#2a4a32;font-size:9px;letter-spacing:1px;text-align:center;padding:18px 0;line-height:2.2;">
+      SIN DATOS<br>Define puntos<br>y calcula rutas
+    </div>
+  </div>
+</div>
+
+<div id="logbox"></div>
+<div id="hud">T+ 00:00  |  EN VUELO: 0</div>
+<div id="modetip">SELECCIONAR EN MAPA</div>
+<div id="camhint">CLICK IZQ: rotar · SCROLL: zoom<br>CLICK DER: paneo · DOBLE CLICK: volar a</div>
+
+<script>
+// ═══════════════════════════════════════════════════
+//  CESIUM — token real + satélite HD + edificios OSM
+// ═══════════════════════════════════════════════════
+Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI5Nzk2NjhmMi0yOWRiLTRjYjQtYmRkMi02NjY5YzA5NjEzYzciLCJpZCI6NDA3MzcwLCJpYXQiOjE3NzQxNzYyNTZ9.sKTe7HFWrgU65NBtKlmJVz5A8fFsVWvBj53Nw5doM4Q';
+
+var viewer = new Cesium.Viewer('cesiumContainer', {
+  baseLayerPicker:       false,
+  geocoder:              false,
+  homeButton:            false,
+  sceneModePicker:       false,
+  navigationHelpButton:  false,
+  animation:             false,
+  timeline:              false,
+  fullscreenButton:      false,
+  infoBox:               false,
+  selectionIndicator:    false,
+  shadows:               false,
+  skyBox:                false,
+  skyAtmosphere:         new Cesium.SkyAtmosphere()
+});
+
+// ── Satélite HD desde Cesium Ion (Bing Maps Aerial) ──
+viewer.scene.imageryLayers.removeAll();
+viewer.scene.imageryLayers.addImageryProvider(
+  new Cesium.IonImageryProvider({ assetId: 2 })  // Bing Maps Aerial HD
+);
+
+// ── Edificios OSM 3D reales ──
+Cesium.Cesium3DTileset.fromIonAssetId(96188).then(function(tileset){
+  viewer.scene.primitives.add(tileset);
+  tileset.style = new Cesium.Cesium3DTileStyle({
+    color : "color('rgb(200,190,175)', 1.0)"  // color natural de edificios
+  });
+  log('Edificios OSM 3D cargados','w');
+}).catch(function(e){
+  log('Edificios 3D: error — '+e.message,'e');
+});
+
+// ── Cámara inicial — Madrid Gran Vía ──
+viewer.camera.setView({
+  destination: Cesium.Cartesian3.fromDegrees(-3.7038, 40.4168, 2200),
+  orientation:{
+    heading: Cesium.Math.toRadians(-10),
+    pitch:   Cesium.Math.toRadians(-38),
+    roll:    0
+  }
+});
+
+// ═══════════════════════════════════════════════════
+//  COLORES Y ESTADO
+// ═══════════════════════════════════════════════════
+var COLORS=['#00ff88','#00ccff','#ffaa00','#ff4488','#aa88ff',
+            '#ff6600','#44ffcc','#ffff00','#ff3333','#88ff44','#cc44ff','#00ffff'];
+
+var pts    = {takeoff:null,target:null,holding:null};
+var pinEnt = {takeoff:null,target:null,holding:null};
+var selMode= null;
+
+var droneEnts  = [];
+var droneState = [];
+var pathEnts   = [];
+var fxEnts     = [];
+
+var simRunning  = false;
+var simLastTime = null;
+var simStartTime= null;
+var animFrame   = null;
+
+// ─── Click en globo ──────────────────────────────
+var tipEl = document.getElementById('modetip');
+
+function activar(tipo){
+  selMode=tipo;
+  document.querySelectorAll('.btac').forEach(b=>b.classList.remove('active'));
+  document.getElementById({takeoff:'btnTK',target:'btnTG',holding:'btnHD'}[tipo]).classList.add('active');
+  tipEl.style.display='block';
+  tipEl.textContent='CLICK EN EL GLOBO → '+tipo.toUpperCase();
+  viewer.canvas.style.cursor='crosshair';
+}
+
+var clickHandler=new Cesium.ScreenSpaceEventHandler(viewer.canvas);
+clickHandler.setInputAction(function(e){
+  if(!selMode) return;
+  var ray=viewer.camera.getPickRay(e.position);
+  var cartesian=viewer.scene.globe.pick(ray,viewer.scene);
+  if(!cartesian){
+    cartesian=viewer.camera.pickEllipsoid(e.position,viewer.scene.globe.ellipsoid);
+  }
+  if(!cartesian) return;
+
+  var carto=Cesium.Cartographic.fromCartesian(cartesian);
+  var lng=Cesium.Math.toDegrees(carto.longitude);
+  var lat=Cesium.Math.toDegrees(carto.latitude);
+  pts[selMode]=[lng,lat];
+
+  if(pinEnt[selMode]) viewer.entities.remove(pinEnt[selMode]);
+
+  var col={takeoff:'#00ff88',target:'#ff3333',holding:'#ffaa00'}[selMode];
+  var lbl={takeoff:'▲ TAKEOFF',target:'✕ OBJETIVO',holding:'◆ ESPERA'}[selMode];
+  var sz ={takeoff:14,target:20,holding:12}[selMode];
+
+  pinEnt[selMode]=viewer.entities.add({
+    position: Cesium.Cartesian3.fromDegrees(lng,lat,10),
+    point:{
+      pixelSize: sz,
+      color: Cesium.Color.fromCssColorString(col),
+      outlineColor: Cesium.Color.BLACK,
+      outlineWidth: 2,
+      heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
+      disableDepthTestDistance: Number.POSITIVE_INFINITY
+    },
+    label:{
+      text: lbl,
+      font: '11px Share Tech Mono',
+      fillColor: Cesium.Color.fromCssColorString(col),
+      outlineColor: Cesium.Color.BLACK,
+      outlineWidth: 2,
+      style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+      verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+      pixelOffset: new Cesium.Cartesian2(0,-18),
+      disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND
+    }
+  });
+
+  document.getElementById({takeoff:'stk',target:'stg',holding:'shd'}[selMode]).textContent='✔';
+  log('Punto '+selMode.toUpperCase()+': '+lat.toFixed(5)+', '+lng.toFixed(5));
+
+  selMode=null;
+  document.querySelectorAll('.btac').forEach(b=>b.classList.remove('active'));
+  tipEl.style.display='none';
+  viewer.canvas.style.cursor='';
+
+  if(pts.takeoff&&pts.target) document.getElementById('btnCalc').disabled=false;
+},Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+// ═══════════════════════════════════════════════════
+//  GEO MATH
+// ═══════════════════════════════════════════════════
+function haversine(a,b){
+  var R=6371000,dLa=(b[1]-a[1])*Math.PI/180,dLo=(b[0]-a[0])*Math.PI/180;
+  var s=Math.sin(dLa/2)**2+Math.cos(a[1]*Math.PI/180)*Math.cos(b[1]*Math.PI/180)*Math.sin(dLo/2)**2;
+  return R*2*Math.atan2(Math.sqrt(s),Math.sqrt(1-s));
+}
+function geoBearing(a,b){
+  var dL=(b[0]-a[0])*Math.PI/180;
+  var y=Math.sin(dL)*Math.cos(b[1]*Math.PI/180);
+  var x=Math.cos(a[1]*Math.PI/180)*Math.sin(b[1]*Math.PI/180)-Math.sin(a[1]*Math.PI/180)*Math.cos(b[1]*Math.PI/180)*Math.cos(dL);
+  return(Math.atan2(y,x)*180/Math.PI+360)%360;
+}
+function offsetGeo(lng,lat,distM,brngDeg){
+  var R=6371000,b=brngDeg*Math.PI/180,la=lat*Math.PI/180,lo=lng*Math.PI/180;
+  var la2=Math.asin(Math.sin(la)*Math.cos(distM/R)+Math.cos(la)*Math.sin(distM/R)*Math.cos(b));
+  var lo2=lo+Math.atan2(Math.sin(b)*Math.sin(distM/R)*Math.cos(la),Math.cos(distM/R)-Math.sin(la)*Math.sin(la2));
+  return[lo2*180/Math.PI,la2*180/Math.PI];
+}
+function bezierGeo(p0,cp,p2,steps){
+  var out=[];
+  for(var i=0;i<=steps;i++){
+    var t=i/steps;
+    out.push([(1-t)*(1-t)*p0[0]+2*(1-t)*t*cp[0]+t*t*p2[0],
+              (1-t)*(1-t)*p0[1]+2*(1-t)*t*cp[1]+t*t*p2[1]]);
+  }
+  return out;
+}
+function cpPerpGeo(a,b,f){
+  var mid=[(a[0]+b[0])/2,(a[1]+b[1])/2];
+  return[mid[0]-(b[1]-a[1])*f, mid[1]+(b[0]-a[0])*f];
+}
+function cumDistGeo(pts){
+  var d=[0];
+  for(var i=1;i<pts.length;i++) d.push(d[i-1]+haversine(pts[i-1],pts[i]));
+  return d;
+}
+function interpPathGeo(pts,cd,dist){
+  if(dist<=0) return pts[0].slice();
+  if(dist>=cd[cd.length-1]) return pts[pts.length-1].slice();
+  var lo=0,hi=cd.length-1;
+  while(lo<hi-1){var m=(lo+hi)>>1;if(cd[m]<=dist)lo=m;else hi=m;}
+  var t=(dist-cd[lo])/(cd[hi]-cd[lo]);
+  return[pts[lo][0]+(pts[hi][0]-pts[lo][0])*t,pts[lo][1]+(pts[hi][1]-pts[lo][1])*t];
+}
+function interpCart(pts,cd,dist){
+  var geo=interpPathGeo(pts.geo,cd,dist);
+  // altitude: cruise at alt, dive on last 25%
+  var frac=dist/cd[cd.length-1];
+  var stagFrac=pts.stagFrac||0.75;
+  var altM=pts.alt;
+  if(frac>stagFrac){
+    var t2=(frac-stagFrac)/(1-stagFrac);
+    altM=pts.alt*(1-0.6*t2*t2);
+  }
+  return Cesium.Cartesian3.fromDegrees(geo[0],geo[1],Math.max(altM,8));
+}
+
+// ═══════════════════════════════════════════════════
+//  DRONE SVG BILLBOARD
+// ═══════════════════════════════════════════════════
+function droneSVG(color){
+  var s=`<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'>
+    <line x1='20' y1='20' x2='7'  y2='7'  stroke='${color}' stroke-width='2.2'/>
+    <line x1='20' y1='20' x2='33' y2='7'  stroke='${color}' stroke-width='2.2'/>
+    <line x1='20' y1='20' x2='7'  y2='33' stroke='${color}' stroke-width='2.2'/>
+    <line x1='20' y1='20' x2='33' y2='33' stroke='${color}' stroke-width='2.2'/>
+    <circle cx='7'  cy='7'  r='5.5' fill='none' stroke='${color}' stroke-width='1.8'/>
+    <circle cx='33' cy='7'  r='5.5' fill='none' stroke='${color}' stroke-width='1.8'/>
+    <circle cx='7'  cy='33' r='5.5' fill='none' stroke='${color}' stroke-width='1.8'/>
+    <circle cx='33' cy='33' r='5.5' fill='none' stroke='${color}' stroke-width='1.8'/>
+    <line x1='3'  y1='7'  x2='11' y2='7'  stroke='${color}' stroke-width='1.2' opacity='0.6'/>
+    <line x1='7'  y1='3'  x2='7'  y2='11' stroke='${color}' stroke-width='1.2' opacity='0.6'/>
+    <line x1='29' y1='7'  x2='37' y2='7'  stroke='${color}' stroke-width='1.2' opacity='0.6'/>
+    <line x1='33' y1='3'  x2='33' y2='11' stroke='${color}' stroke-width='1.2' opacity='0.6'/>
+    <line x1='3'  y1='33' x2='11' y2='33' stroke='${color}' stroke-width='1.2' opacity='0.6'/>
+    <line x1='7'  y1='29' x2='7'  y2='37' stroke='${color}' stroke-width='1.2' opacity='0.6'/>
+    <line x1='29' y1='33' x2='37' y2='33' stroke='${color}' stroke-width='1.2' opacity='0.6'/>
+    <line x1='33' y1='29' x2='33' y2='37' stroke='${color}' stroke-width='1.2' opacity='0.6'/>
+    <rect x='16' y='16' width='8' height='8' rx='1.5' fill='${color}'/>
+    <circle cx='20' cy='20' r='2' fill='rgba(0,0,0,0.7)'/>
+    <line x1='20' y1='2' x2='20' y2='8' stroke='${color}' stroke-width='2'/>
+    <!-- glow ring -->
+    <circle cx='20' cy='20' r='18' fill='none' stroke='${color}' stroke-width='0.5' opacity='0.2'/>
+  </svg>`;
+  return 'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(s);
+}
+
+// ═══════════════════════════════════════════════════
+//  CALCULAR MISIÓN
+// ═══════════════════════════════════════════════════
+function calcular(){
+  if(!pts.takeoff||!pts.target){log('Define Takeoff y Objetivo','e');return;}
+  detener();
+  clearPaths();
+  droneEnts.forEach(d=>viewer.entities.remove(d.entity));
+  droneEnts=[]; droneState=[];
+
+  var n    =parseInt(document.getElementById('nDr').value);
+  var spd  =parseFloat(document.getElementById('spd').value);
+  var alt  =parseFloat(document.getElementById('alt').value);
+  var rad  =parseFloat(document.getElementById('rad').value);
+  var curv =parseFloat(document.getElementById('curv').value);
+  var pat  =document.getElementById('pat').value;
+
+  var tk =pts.takeoff, tgt=pts.target, hld=pts.holding;
+  document.getElementById('tcards').innerHTML='';
+
+  for(var i=0;i<n;i++){
+    var hex=COLORS[i%COLORS.length];
+    var cesCol=Cesium.Color.fromCssColorString(hex);
+
+    // Ángulo de ataque
+    var angleDeg;
+    if(pat==='radial')      angleDeg=(360/n)*i;
+    else if(pat==='spiral') angleDeg=((360/n)*i+i*22)%360;
+    else{
+      var half=Math.ceil(n/2);
+      angleDeg=i<half?15+(150/(half-1||1))*i:195+(150/(Math.floor(n/2)-1||1))*(i-half);
+    }
+
+    var staging=offsetGeo(tgt[0],tgt[1],rad,angleDeg);
+    var holdPos=hld?offsetGeo(hld[0],hld[1],80+i*15,(360/n)*i):null;
+
+    var arcF=(i%2===0?1:-1)*curv*(1+i*0.05);
+
+    // Rutas Bézier
+    var cruisePts;
+    if(holdPos){
+      cruisePts=[
+        ...bezierGeo(tk,cpPerpGeo(tk,holdPos,arcF*0.5),holdPos,30),
+        ...bezierGeo(holdPos,cpPerpGeo(holdPos,staging,arcF*0.4),staging,30).slice(1)
+      ];
+    } else {
+      cruisePts=bezierGeo(tk,cpPerpGeo(tk,staging,arcF*0.55),staging,50);
+    }
+
+    // Arco de ataque final — muy pronunciado
+    var cpAtk=cpPerpGeo(staging,tgt,arcF*curv*0.85);
+    var attackPts=bezierGeo(staging,cpAtk,tgt,40);
+
+    var allGeo=[...cruisePts,...attackPts.slice(1)];
+    var cd=cumDistGeo(allGeo);
+    var totD=cd[cd.length-1];
+    var stagIdx=cruisePts.length-1;
+    var stagFrac=cd[stagIdx]/totD;
+
+    var spdAtk=spd*1.5;
+    var timeTotal=cd[stagIdx]/spd+(totD-cd[stagIdx])/spdAtk;
+
+    // Convertir a Cartesian3 con altitud
+    var cartPath=allGeo.map((p,j)=>{
+      var frac=j/(allGeo.length-1);
+      var a=frac>stagFrac ? alt*(1-0.6*Math.pow((frac-stagFrac)/(1-stagFrac),2)) : alt;
+      return Cesium.Cartesian3.fromDegrees(p[0],p[1],Math.max(a,8));
+    });
+
+    // Línea ghost de crucero (punteada)
+    var cruiseCart=cruisePts.map(p=>Cesium.Cartesian3.fromDegrees(p[0],p[1],alt));
+    var cruiseLine=viewer.entities.add({
+      polyline:{
+        positions:cruiseCart,width:1.2,
+        material:new Cesium.PolylineDashMaterialProperty({
+          color:Cesium.Color.fromCssColorString(hex).withAlpha(0.3),dashLength:14
+        })
+      }
+    });
+
+    // Línea ataque (sólida, brillante)
+    var attackCart=attackPts.map((p,j)=>{
+      var t=j/(attackPts.length-1);
+      return Cesium.Cartesian3.fromDegrees(p[0],p[1],alt*(1-0.6*t*t));
+    });
+    var attackLine=viewer.entities.add({
+      polyline:{
+        positions:attackCart,width:2.8,
+        material:new Cesium.PolylineGlowMaterialProperty({
+          glowPower:0.2,
+          color:Cesium.Color.fromCssColorString(hex).withAlpha(0.85)
+        })
+      }
+    });
+
+    // Punto staging
+    var stagEnt=viewer.entities.add({
+      position:Cesium.Cartesian3.fromDegrees(staging[0],staging[1],alt),
+      point:{pixelSize:6,color:Cesium.Color.fromCssColorString(hex).withAlpha(0.5),
+             outlineColor:Cesium.Color.fromCssColorString(hex),outlineWidth:1,
+             disableDepthTestDistance:Number.POSITIVE_INFINITY}
+    });
+    pathEnts.push(cruiseLine,attackLine,stagEnt);
+
+    // Entidad dron
+    var droneEnt=viewer.entities.add({
+      position:Cesium.Cartesian3.fromDegrees(tk[0],tk[1],alt),
+      billboard:{
+        image:droneSVG(hex),
+        width:28,height:28,
+        eyeOffset:new Cesium.Cartesian3(0,0,-50),
+        disableDepthTestDistance:Number.POSITIVE_INFINITY,
+        verticalOrigin:Cesium.VerticalOrigin.CENTER,
+        rotation:0
+      },
+      polyline:{
+        positions:new Cesium.CallbackProperty(()=>
+          droneState[i]&&droneState[i].trail.length>1
+            ? droneState[i].trail
+            : [Cesium.Cartesian3.fromDegrees(tk[0],tk[1],alt)],false),
+        width:2,
+        material:new Cesium.PolylineGlowMaterialProperty({
+          glowPower:0.1,
+          color:Cesium.Color.fromCssColorString(hex).withAlpha(0.7)
+        })
+      }
+    });
+    droneEnts.push({entity:droneEnt,hex});
+
+    droneState.push({
+      i,hex,allGeo,cartPath,cd,totD,stagIdx,stagFrac,
+      spd,spdAtk,timeTotal,alt,
+      prog:0,done:false,trail:[],entity:droneEnt
+    });
+
+    // Tarjeta telemetría
+    var card=document.createElement('div');
+    card.className='tc'; card.id='tc'+i;
+    card.innerHTML=`
+      <div class="tch">
+        <span class="tcid" style="color:${hex}">D-${String(i+1).padStart(2,'0')}</span>
+        <span class="tcst ready" id="ts${i}">LISTO</span>
+      </div>
+      <div class="tcr"><span>Dist.</span><span>${(totD/1000).toFixed(2)} km</span></div>
+      <div class="tcr"><span>ETA</span><span id="te${i}">${fmtT(timeTotal)}</span></div>
+      <div class="tcr"><span>Vel.</span><span id="tv${i}">${spd.toFixed(0)} m/s</span></div>
+      <div class="tcr"><span>Alt.</span><span id="ta${i}">${alt} m</span></div>
+      <div class="tcr"><span>Fase</span><span id="tf${i}">CRUCERO</span></div>
+      <div class="tcp"><div class="tcpf" id="tp${i}" style="background:${hex}"></div></div>`;
+    document.getElementById('tcards').appendChild(card);
+  }
+
+  // Anillo objetivo
+  var tgtRing=viewer.entities.add({
+    position:Cesium.Cartesian3.fromDegrees(tgt[0],tgt[1],5),
+    ellipse:{
+      semiMajorAxis:rad,semiMinorAxis:rad,
+      material:Cesium.Color.RED.withAlpha(0.06),
+      outline:true,outlineColor:Cesium.Color.fromCssColorString('#ff3333').withAlpha(0.6),
+      outlineWidth:2,heightReference:Cesium.HeightReference.CLAMP_TO_GROUND
+    }
+  });
+  pathEnts.push(tgtRing);
+
+  document.getElementById('btnLaunch').disabled=false;
+  document.getElementById('mstatus').textContent='● RUTAS CALCULADAS — '+n+' DRONES';
+  log('Rutas OK: '+n+' drones | '+pat+' | radio '+rad+'m | curv '+curv,'w');
+
+  // Volar cámara para ver la misión completa
+  viewer.camera.flyTo({
+    destination:Cesium.Cartesian3.fromDegrees(tgt[0],tgt[1]-0.015,3800),
+    orientation:{heading:Cesium.Math.toRadians(0),pitch:Cesium.Math.toRadians(-42),roll:0},
+    duration:2
+  });
+}
+
+// ═══════════════════════════════════════════════════
+//  SIMULACIÓN
+// ═══════════════════════════════════════════════════
+function lanzar(){
+  if(simRunning||!droneState.length) return;
+
+  droneState.forEach((ds,i)=>{
+    ds.prog=0; ds.done=false; ds.trail=[];
+    ds.entity.position=ds.cartPath[0];
+    ds.entity.billboard.show=true;
+    document.getElementById('ts'+i).className='tcst fly';
+    document.getElementById('ts'+i).textContent='VUELO';
+    document.getElementById('tc'+i).className='tc fly';
+    document.getElementById('tp'+i).style.width='0%';
+    document.getElementById('tf'+i).textContent='CRUCERO';
+  });
+
+  simRunning=true; simLastTime=null; simStartTime=performance.now();
+  document.getElementById('hud').style.display='block';
+  document.getElementById('btnLaunch').style.display='none';
+  document.getElementById('btnStop').style.display='block';
+  document.getElementById('mstatus').textContent='▶ ATAQUE EN CURSO';
+  log('⬡ Enjambre lanzado — '+droneState.length+' drones en vuelo','w');
+  animFrame=requestAnimationFrame(simStep);
+}
+
+function detener(){
+  simRunning=false;
+  if(animFrame){cancelAnimationFrame(animFrame);animFrame=null;}
+  simLastTime=null;
+  document.getElementById('hud').style.display='none';
+  document.getElementById('btnLaunch').style.display='block';
+  document.getElementById('btnStop').style.display='none';
+}
+
+function simStep(ts){
+  if(!simRunning) return;
+  animFrame=requestAnimationFrame(simStep);
+
+  if(!simLastTime) simLastTime=ts;
+  var dtReal=Math.min((ts-simLastTime)/1000,0.05);
+  simLastTime=ts;
+  var sf=parseFloat(document.getElementById('simspd').value);
+  var dt=dtReal*sf;
+
+  var inFlight=0,allDone=true;
+
+  droneState.forEach((ds,i)=>{
+    if(ds.done) return;
+    allDone=false; inFlight++;
+
+    var stagDist=ds.cd[ds.stagIdx];
+    var isAtk=ds.prog>=stagDist;
+    var phase=isAtk?(ds.prog-stagDist)/(ds.totD-stagDist):0;
+    var curSpd=isAtk
+      ? ds.spd+(ds.spdAtk-ds.spd)*Math.min(phase,1)**2
+      : ds.spd;
+
+    ds.prog=Math.min(ds.prog+curSpd*dt,ds.totD);
+
+    // Posición interpolada en el path Cartesian3
+    var lo=0,hi=ds.cd.length-1;
+    while(lo<hi-1){var m=(lo+hi)>>1;if(ds.cd[m]<=ds.prog)lo=m;else hi=m;}
+    var t2=(ds.prog-ds.cd[lo])/(ds.cd[hi]-ds.cd[lo]);
+    var pos=Cesium.Cartesian3.lerp(ds.cartPath[lo],ds.cartPath[hi],t2,new Cesium.Cartesian3());
+
+    ds.entity.position=pos;
+
+    // Heading → rotar billboard
+    var posGeo=interpPathGeo(ds.allGeo,ds.cd,ds.prog);
+    var posGeoN=interpPathGeo(ds.allGeo,ds.cd,Math.min(ds.prog+20,ds.totD));
+    var hdg=geoBearing(posGeo,posGeoN);
+    ds.entity.billboard.rotation=-Cesium.Math.toRadians(hdg);
+
+    // Trail — últimos 50 puntos
+    ds.trail.push(pos.clone());
+    if(ds.trail.length>50) ds.trail.shift();
+
+    // Altura actual
+    var carto=Cesium.Cartographic.fromCartesian(pos);
+    var altNow=Math.round(Cesium.Math.toDegrees(carto.latitude)*0+carto.height);
+
+    // Actualizar tarjeta
+    var pct=(ds.prog/ds.totD)*100;
+    var rem=Math.max(0,(ds.totD-ds.prog)/curSpd);
+    document.getElementById('tp'+i).style.width=pct.toFixed(1)+'%';
+    document.getElementById('tv'+i).textContent=curSpd.toFixed(0)+' m/s';
+    document.getElementById('te'+i).textContent=fmtT(rem);
+    document.getElementById('ta'+i).textContent=Math.round(carto.height)+' m';
+    document.getElementById('tf'+i).textContent=isAtk?'ATAQUE ▶':'CRUCERO';
+
+    // IMPACTO
+    if(ds.prog>=ds.totD){
+      ds.done=true;
+      ds.entity.billboard.show=false;
+      impactEffect(ds.allGeo[ds.allGeo.length-1],ds.hex);
+      document.getElementById('ts'+i).className='tcst hit';
+      document.getElementById('ts'+i).textContent='IMPACTO';
+      document.getElementById('tc'+i).className='tc hit';
+      document.getElementById('tp'+i).style.width='100%';
+      document.getElementById('tf'+i).textContent='IMPACTO ✕';
+      document.getElementById('te'+i).textContent='0s';
+      log('DRON-'+String(i+1).padStart(2,'0')+' — IMPACTO CONFIRMADO','e');
+    }
+  });
+
+  // HUD timer
+  var elapsed=(performance.now()-simStartTime)/1000*sf;
+  var eM=Math.floor(elapsed/60),eS=Math.floor(elapsed%60);
+  document.getElementById('hud').textContent=
+    'T+ '+String(eM).padStart(2,'0')+':'+String(eS).padStart(2,'0')+
+    '  |  EN VUELO: '+inFlight+'/'+droneState.length;
+
+  if(allDone){
+    simRunning=false;
+    document.getElementById('hud').textContent='■ OBJETIVO ELIMINADO — MISIÓN COMPLETADA';
+    document.getElementById('mstatus').textContent='■ MISIÓN COMPLETADA';
+    document.getElementById('btnLaunch').style.display='block';
+    document.getElementById('btnStop').style.display='none';
+    log('Misión completada — todos los impactos confirmados','w');
+  }
+}
+
+// ═══════════════════════════════════════════════════
+//  EFECTO DE IMPACTO — explosión real en la ciudad
+// ═══════════════════════════════════════════════════
+function impactEffect(lngLat,hex){
+  var pos3=Cesium.Cartesian3.fromDegrees(lngLat[0],lngLat[1],5);
+
+  // Flash central naranja
+  var flash=viewer.entities.add({
+    position:pos3,
+    point:{
+      pixelSize:36,
+      color:Cesium.Color.fromCssColorString('#ff8800').withAlpha(0.95),
+      outlineColor:Cesium.Color.fromCssColorString('#ffdd00'),
+      outlineWidth:4,
+      disableDepthTestDistance:Number.POSITIVE_INFINITY
+    }
+  });
+  fxEnts.push(flash);
+  setTimeout(()=>{try{viewer.entities.remove(flash);}catch(e){}},500);
+
+  // 3 anillos que se expanden y desvanecen
+  [40,100,220].forEach((r,k)=>{
+    var ring=viewer.entities.add({
+      position:Cesium.Cartesian3.fromDegrees(lngLat[0],lngLat[1],3),
+      ellipse:{
+        semiMajorAxis:r,semiMinorAxis:r,
+        material:Cesium.Color.fromCssColorString('#ff4400').withAlpha(0.4-k*0.1),
+        outline:true,
+        outlineColor:Cesium.Color.fromCssColorString('#ff8800').withAlpha(0.9),
+        outlineWidth:3,
+        heightReference:Cesium.HeightReference.CLAMP_TO_GROUND
+      }
+    });
+    fxEnts.push(ring);
+    var t0=performance.now(), dur=1400+k*400;
+    var iv=setInterval(()=>{
+      var t=Math.min((performance.now()-t0)/dur,1);
+      var nr=r*(1+t*3);
+      try{
+        ring.ellipse.semiMajorAxis=nr;
+        ring.ellipse.semiMinorAxis=nr;
+        ring.ellipse.material=Cesium.Color.fromCssColorString('#ff4400').withAlpha((0.4-k*0.1)*(1-t));
+        ring.ellipse.outlineColor=Cesium.Color.fromCssColorString('#ff8800').withAlpha(0.9*(1-t));
+      }catch(e){}
+      if(t>=1){clearInterval(iv);try{viewer.entities.remove(ring);}catch(e){}}
+    },40);
+  });
+
+  // Fuego persistente parpadeante
+  var fire=viewer.entities.add({
+    position:Cesium.Cartesian3.fromDegrees(lngLat[0],lngLat[1],4),
+    ellipse:{
+      semiMajorAxis:20,semiMinorAxis:20,
+      material:new Cesium.ColorMaterialProperty(
+        new Cesium.CallbackProperty(()=>{
+          var flicker=0.4+0.4*Math.sin(Date.now()/120+Math.random()*0.3);
+          return Cesium.Color.fromCssColorString('#ff4400').withAlpha(flicker);
+        },false)
+      ),
+      heightReference:Cesium.HeightReference.CLAMP_TO_GROUND
+    }
+  });
+  fxEnts.push(fire);
+
+  // Columna de humo
+  var smoke=viewer.entities.add({
+    position:Cesium.Cartesian3.fromDegrees(lngLat[0],lngLat[1],80),
+    cylinder:{
+      length:160,
+      topRadius:40,
+      bottomRadius:5,
+      material:Cesium.Color.fromCssColorString('#332222').withAlpha(0.5),
+      outline:false
+    }
+  });
+  fxEnts.push(smoke);
+}
+
+// ═══════════════════════════════════════════════════
+//  LIMPIAR
+// ═══════════════════════════════════════════════════
+function clearPaths(){
+  pathEnts.forEach(e=>{try{viewer.entities.remove(e);}catch(ex){}});
+  fxEnts.forEach(e=>{try{viewer.entities.remove(e);}catch(ex){}});
+  pathEnts=[]; fxEnts=[];
+}
+function limpiar(){
+  detener();
+  clearPaths();
+  droneEnts.forEach(d=>{try{viewer.entities.remove(d.entity);}catch(e){}});
+  droneEnts=[]; droneState=[];
+  Object.keys(pts).forEach(k=>{
+    pts[k]=null;
+    if(pinEnt[k]){try{viewer.entities.remove(pinEnt[k]);}catch(e){}pinEnt[k]=null;}
+    document.getElementById({takeoff:'stk',target:'stg',holding:'shd'}[k]).textContent='';
+  });
+  document.getElementById('tcards').innerHTML='<div style="color:#2a4a32;font-size:9px;letter-spacing:1px;text-align:center;padding:18px 0;line-height:2.2;">SIN DATOS<br>Define puntos<br>y calcula rutas</div>';
+  document.getElementById('btnCalc').disabled=true;
+  document.getElementById('btnLaunch').disabled=true;
+  document.getElementById('mstatus').textContent='● STANDBY — Define Takeoff y Objetivo';
+  log('Misión limpiada','w');
+}
+
+// ═══════════════════════════════════════════════════
+//  UTILS
+// ═══════════════════════════════════════════════════
+function fmtT(s){
+  if(s<60) return Math.round(s)+'s';
+  return Math.floor(s/60)+'m'+String(Math.round(s%60)).padStart(2,'0')+'s';
+}
+setInterval(()=>{
+  document.getElementById('clk').textContent=new Date().toISOString().slice(11,19)+' UTC';
+},1000);
+document.getElementById('simspd').addEventListener('input',function(){
+  document.getElementById('simval').textContent=this.value+'×';
+});
+function log(msg,type){
+  var el=document.getElementById('logbox');
+  var d=document.createElement('div');
+  d.className='ll'+(type?' '+type:'');
+  d.innerHTML='<span>'+new Date().toISOString().slice(11,19)+'</span>'+msg;
+  el.appendChild(d); el.scrollTop=el.scrollHeight;
+}
+
+log('Cesium Ion conectado — satélite HD + edificios OSM 3D');
+log('1) TAKEOFF → 2) OBJETIVO → 3) Calcular → 4) Lanzar');
+</script>
+</body>
 </html>
