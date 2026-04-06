@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DRONE SIM // ArduPilot SITL</title>
+<link href="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.css" rel="stylesheet">
+<script src="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header id="header">
+  <div class="logo">DRONE<span>SIM</span> <span class="logo-sub">// ARDUPILOT SITL</span></div>
+  <div id="clock">--:--:-- UTC</div>
+  <div id="conn-badge" class="badge-disconnected">● DISCONNECTED</div>
+  <div id="status-bar">SYSTEM READY</div>
+</header>
+
+<div id="main">
+  <aside id="sidebar">
+
+    <div class="panel-section">
+      <div class="section-title">◈ FLEET</div>
+      <button class="btn-tac" onclick="UI.addDrone()">＋ ADD DRONE</button>
+      <button class="btn-tac" onclick="UI.clearAll()">✕ CLEAR ALL</button>
+      <div id="fleet-list"></div>
+    </div>
+
+    <div class="panel-section" id="drone-controls" style="display:none">
+      <div class="section-title">◈ SELECTED: <span id="sel-name">—</span></div>
+
+      <div class="section-subtitle">OPERACIONES</div>
+      <div class="ops-grid">
+        <button class="btn-op btn-op-green" onclick="UI.takeoff()"><span class="op-icon">↑</span>TAKEOFF</button>
+        <button class="btn-op btn-op-amber" onclick="UI.landing()"><span class="op-icon">↓</span>LAND</button>
+        <button class="btn-op btn-op-red"   onclick="UI.abortMission()"><span class="op-icon">✕</span>ABORT</button>
+        <button class="btn-op btn-op-cyan"  onclick="UI.setMode('RTL')"><span class="op-icon">⌂</span>RTL</button>
+      </div>
+
+      <div class="section-subtitle">MODO DE VUELO</div>
+      <div class="mode-grid">
+        <button class="btn-mode" data-mode="AUTO"     onclick="UI.setMode('AUTO')">AUTO</button>
+        <button class="btn-mode" data-mode="LOITER"   onclick="UI.setMode('LOITER')">LOITER</button>
+        <button class="btn-mode" data-mode="ALT_HOLD" onclick="UI.setMode('ALT_HOLD')">ALT HOLD</button>
+        <button class="btn-mode" data-mode="ACRO"     onclick="UI.setMode('ACRO')">ACRO</button>
+      </div>
+
+      <div class="section-subtitle">PARÁMETROS</div>
+      <div class="param-row">
+        <label>SPEED m/s</label>
+        <input type="number" id="p-speed" value="12" min="1" max="30" step="1" onchange="UI.setSpeed(this.value)">
+      </div>
+      <div class="param-row">
+        <label>TAKEOFF ALT m</label>
+        <input type="number" id="p-takeoff-alt" value="30" min="5" max="200" step="5">
+      </div>
+      <div class="param-row">
+        <label>ALT HOLD m</label>
+        <input type="number" id="p-alt" value="50" min="5" max="500" step="5" onchange="UI.setAltHold(this.value)">
+      </div>
+      <div class="param-row">
+        <label>RTL/ABORT ALT m</label>
+        <input type="number" id="p-rtl-alt" value="60" min="20" max="300" step="10" onchange="UI.setRTLAlt(this.value)">
+      </div>
+
+      <div class="section-subtitle">RALLY POINT (DESTINO ABORT)</div>
+      <button class="btn-tac" id="btn-set-rally" onclick="UI.startSetRally()">✛ FIJAR EN MAPA</button>
+      <div id="rally-coords" class="info-label">Sin rally — usará HOME</div>
+      <button class="btn-tac" onclick="UI.clearRally()">✕ BORRAR RALLY</button>
+
+      <div class="section-subtitle">ÁREA DE VUELO</div>
+      <button class="btn-tac" id="btn-draw-area" onclick="UI.startDrawArea()">⬡ DIBUJAR ÁREA (2 clics)</button>
+      <div id="area-coords" class="info-label">Sin área definida</div>
+      <button class="btn-tac" onclick="UI.clearArea()">✕ BORRAR ÁREA</button>
+      <button class="btn-action btn-green" id="btn-patrol" onclick="UI.patrolArea()" style="display:none">⟳ PATRULLAR ÁREA</button>
+
+      <div id="acro-panel" style="display:none">
+        <div class="section-subtitle">ACRO RATES (deg/s)</div>
+        <div class="param-row">
+          <label>ROLL</label>
+          <input type="range" id="acro-roll" min="-180" max="180" value="0" oninput="UI.acroInput('roll',this.value)">
+          <span id="acro-roll-v">0</span>
+        </div>
+        <div class="param-row">
+          <label>PITCH</label>
+          <input type="range" id="acro-pitch" min="-90" max="90" value="0" oninput="UI.acroInput('pitch',this.value)">
+          <span id="acro-pitch-v">0</span>
+        </div>
+        <div class="param-row">
+          <label>YAW</label>
+          <input type="range" id="acro-yaw" min="-180" max="180" value="0" oninput="UI.acroInput('yaw',this.value)">
+          <span id="acro-yaw-v">0</span>
+        </div>
+      </div>
+
+      <div class="section-subtitle">WAYPOINTS</div>
+      <button class="btn-tac" id="btn-add-wp" onclick="UI.startAddWP()">✛ AÑADIR WP EN MAPA</button>
+      <button class="btn-tac" onclick="UI.clearWPs()">✕ LIMPIAR WPS</button>
+      <div id="wp-list"></div>
+
+      <div class="section-subtitle">MISIÓN AUTOMÁTICA</div>
+      <div class="param-row">
+        <label>PATRÓN</label>
+        <select id="pattern-sel">
+          <option value="direct">DIRECT</option>
+          <option value="grid">GRID SURVEY</option>
+          <option value="orbit">ORBIT</option>
+          <option value="swarm">SWARM</option>
+        </select>
+      </div>
+      <div class="param-row">
+        <label>ALTITUD m</label>
+        <input type="number" id="p-plan-alt" value="60" min="10" max="400" step="5">
+      </div>
+      <button class="btn-action btn-green" onclick="UI.planMission()">⬡ PLAN MISSION</button>
+
+      <div style="display:flex;gap:4px;margin-top:6px">
+        <button class="btn-tac" style="flex:1" onclick="ParamsPanel.show(DroneState.getSelected()?.id)">⚙ PARAMS</button>
+        <button class="btn-tac" style="flex:1" onclick="AttitudeIndicator.toggle()">✈ ADI</button>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="section-title">◈ SIMULACIÓN</div>
+      <div class="slider-row">
+        <label>VEL ×</label>
+        <input type="range" id="sim-speed" min="0.5" max="20" step="0.5" value="1">
+        <span id="sim-speed-v">1×</span>
+      </div>
+      <button class="btn-action btn-green" id="btn-start" onclick="UI.startSim()">▶ INICIAR SIM</button>
+      <button class="btn-action btn-red"   id="btn-stop"  onclick="UI.stopSim()" style="display:none">■ DETENER</button>
+      <button class="btn-action btn-amber" onclick="UI.exportMission()">⬇ EXPORTAR WPS</button>
+    </div>
+
+    <div class="panel-section">
+      <div class="section-title">◈ MAVLINK / SITL</div>
+      <div class="param-row">
+        <label>SERVER</label>
+        <input type="text" id="srv-addr" value="ws://localhost:8765/ws" style="width:130px;font-size:9px">
+      </div>
+      <button class="btn-tac" onclick="UI.connect()">⟳ CONNECT</button>
+      <div id="sitl-status" class="info-label">SITL: DEMO MODE</div>
+    </div>
+
+    <div id="log-panel">
+      <div class="section-title" style="padding:4px 0">◈ LOG</div>
+      <div id="log-entries"></div>
+    </div>
+
+  </aside>
+
+  <div id="map-wrap">
+    <div id="map"></div>
+    <div class="corner tl"></div><div class="corner tr"></div>
+    <div class="corner bl"></div><div class="corner br"></div>
+    <div id="map-toolbar">
+      <button class="map-btn active" id="btn-3d"    onclick="UI.toggle3D()">3D</button>
+      <button class="map-btn"        id="btn-sat"   onclick="UI.toggleSat()">SAT</button>
+      <button class="map-btn"        id="btn-tilt"  onclick="UI.tiltView()">TILT</button>
+      <button class="map-btn"        id="btn-north" onclick="UI.resetNorth()">N↑</button>
+      <button class="map-btn"        id="btn-home"  onclick="UI.flyHome()">⌂</button>
+      <button class="map-btn"        id="btn-fpv"   onclick="UI.toggleFPV()" title="Seguir dron / FPV">FPV</button>
+    </div>
+    <!-- FPV mode badge -->
+    <div id="fpv-badge" style="
+      display:none;position:absolute;top:14px;left:50%;transform:translateX(-50%);
+      z-index:30;background:rgba(5,10,7,0.92);border:1px solid var(--cyan);
+      color:var(--cyan);font-family:Orbitron,monospace;font-size:10px;
+      letter-spacing:3px;padding:4px 16px;pointer-events:none;">
+      🎥 FOLLOW
+    </div>
+    <div id="sim-hud" style="display:none">
+      T+ <span id="hud-time">00:00</span> &nbsp;|&nbsp;
+      FLYING: <span id="hud-flying">0</span> / <span id="hud-total">0</span> &nbsp;|&nbsp;
+      <span id="hud-phase">—</span>
+    </div>
+    <div id="mode-label"></div>
+    <div id="click-mode" style="display:none">CLICK EN EL MAPA &nbsp;[ESC para cancelar]</div>
+  </div>
+
+  <aside id="rightpanel">
+    <div class="rp-header">◈ TELEMETRÍA</div>
+    <div id="drone-cards-wrap">
+      <div id="empty-state">SIN DRONES<br>AÑADE UN DRON</div>
+      <div id="drone-cards"></div>
+    </div>
+  </aside>
+</div>
+
+<script src="js/ws.js"></script>
+<script src="js/map3d.js"></script>
+<script src="js/drone_state.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/hud.js"></script>
+<script src="js/params_panel.js"></script>
+<script src="js/attitude_indicator.js"></script>
+<script>
+  window.addEventListener('DOMContentLoaded', () => {
+    Map3D.init();
+    UI.init();
+    HUD.start();
+    AttitudeIndicator.init();
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+# ── Servidor web ──────────────────────────────────────────────────────────────
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0      # incluye websockets, httptools, watchfiles
+websockets>=12.0
+
+# ── HTTP / API de terreno ─────────────────────────────────────────────────────
+requests>=2.31.0
+
+# ── MAVLink / ArduPilot SITL (opcional) ──────────────────────────────────────
+# Instalar solo si vas a conectar con ArduPilot SITL real.
+# En modo DEMO no hace falta.
+pymavlink>=2.4.41
+
+# ── Utilidades ────────────────────────────────────────────────────────────────
+python-dotenv>=1.0.0           # cargar variables de entorno desde .env
+aiofiles>=23.2.0               # lectura asíncrona de archivos (caché terreno)
+
+# ── Opcional: Gazebo live bridge ──────────────────────────────────────────────
+# Solo en Linux con Gazebo Harmonic instalado:
+# gz-transport13
