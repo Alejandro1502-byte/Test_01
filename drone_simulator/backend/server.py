@@ -197,6 +197,42 @@ async def handle_client_message(cid: str, ws: WebSocket, msg: dict):
         if drone:
             drone.target_alt = float(msg["altitude"])
 
+    elif t == "formation_launch":
+        # Lanzar todos los drones en formación desde un punto de takeoff
+        # msg: {takeoff: {lat,lon}, landing: {lat,lon}, formation: str,
+        #       n_drones: int, altitude: float, speed: float}
+        result = planner.plan_formation(msg)
+        for drone_cfg in result["drones"]:
+            drone = swarm_mgr.add_drone(drone_cfg)
+            drone.waypoints.clear()
+            for wp in drone_cfg["waypoints"]:
+                drone.add_waypoint(wp)
+            drone.set_mode("AUTO", {})
+            drone.speed = float(msg.get("speed", 12))
+            await broadcast({"type": "drone_added", "drone": drone.serialize()})
+        await broadcast({"type": "formation_ready", "result": result})
+
+    elif t == "abort_all":
+        # Todos los drones vuelven al punto de salida
+        home = msg.get("home")
+        for drone in swarm_mgr.all_drones():
+            if home:
+                drone.rtl_home = home
+            drone.set_mode("RTL", {})
+        await broadcast({"type": "abort_all_sent",
+                         "drone_count": len(swarm_mgr.all_drones())})
+
+    elif t == "set_takeoff_point":
+        # Guardar punto de takeoff global
+        swarm_mgr.takeoff_point = {"lat": msg["lat"], "lon": msg["lon"]}
+        await ws.send_json({"type": "takeoff_point_set",
+                            "lat": msg["lat"], "lon": msg["lon"]})
+
+    elif t == "set_landing_point":
+        swarm_mgr.landing_point = {"lat": msg["lat"], "lon": msg["lon"]}
+        await ws.send_json({"type": "landing_point_set",
+                            "lat": msg["lat"], "lon": msg["lon"]})
+
 
 # ─── Simulation loop ─────────────────────────────────────────────────────────
 SIM_HZ = 20          # simulation ticks per second

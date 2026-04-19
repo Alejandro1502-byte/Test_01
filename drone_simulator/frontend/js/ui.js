@@ -1,204 +1,194 @@
 /**
- * js/ui.js – UI controller: all button handlers, mode logic, log, WP mgmt
+ * ui.js — Flujo simplificado:
+ * 1. Pulsa TAKEOFF → click en mapa → drones aparecen en formación
+ * 2. Pulsa LANDING → click en mapa → destino de aterrizaje
+ * 3. INICIAR SIM → vuelan solos
+ * 4. ABORT → todos vuelven al punto de takeoff
  */
 const UI = (() => {
-  const DRONE_COLORS = [
-    '#00ff88','#00ccff','#ffaa00','#ff3344',
-    '#aa88ff','#ff88cc','#88ffcc','#ffff44',
-  ];
-  let _colorIdx = 0;
-  let _droneNum  = 1;
-  let _wpAddActive = false;
-  let _simFactor = 1;
-  let _simStartT = null;
-  let _simRaf   = null;
 
-  // ── Lifecycle ─────────────────────────────────────────────────────────────
+  let _mode       = null;   // 'takeoff' | 'landing' | 'waypoint'
+  let _tkPoint    = null;   // {lat, lon}
+  let _ldPoint    = null;
+  let _formation  = 'line';
+  let _clickFn    = null;   // función registrada en el mapa
+
+  // ── Init ──────────────────────────────────────────────────────────────────
   function init() {
-    // Clock
-    setInterval(_updateClock, 1000);
-    _updateClock();
+    setInterval(_tick, 1000);
+    _tick();
 
-    // Sim speed slider
-    const slider = document.getElementById('sim-speed');
-    slider.addEventListener('input', () => {
-      _simFactor = parseFloat(slider.value);
-      document.getElementById('sim-speed-v').textContent = _simFactor + '×';
+    document.getElementById('sim-speed').addEventListener('input', e => {
+      const v = e.target.value;
+      document.getElementById('sim-speed-v').textContent = v + '×';
     });
 
-    // WS connect on load (optional – user can also press Connect)
-    // WS.connect();  // uncomment to auto-connect
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') _cancelMode();
+    });
   }
 
+  function _tick() {
+    const el = document.getElementById('clock');
+    if (el) el.textContent = new Date().toUTCString().slice(17,25) + ' UTC';
+  }
+
+  // ── Conexión ──────────────────────────────────────────────────────────────
   function connect() {
-    const url = document.getElementById('srv-addr').value.trim();
-    WS.connect(url);
+    WS.connect(document.getElementById('srv-addr').value.trim());
   }
 
-  // ── Drone management ─────────────────────────────────────────────────────
-  function addDrone() {
-    const center = Map3D.getMap().getCenter();
-    const color  = DRONE_COLORS[_colorIdx % DRONE_COLORS.length];
-    _colorIdx++;
-    WS.send({
-      type:  'add_drone',
-      name:  `UAV-${String(_droneNum).padStart(2,'0')}`,
-      color,
-      lat:   center.lat,
-      lon:   center.lng,
-      alt:   0,
-      armed: true,
-    });
-    _droneNum++;
+  // ── Modo de click en mapa ─────────────────────────────────────────────────
+  function _enterMapClick(mode, bannerText, color) {
+    // Cancelar modo anterior si había
+    _cancelMode();
+    _mode = mode;
+
+    // Banner visible en el mapa
+    const banner = document.getElementById('click-banner');
+    banner.style.borderColor = color || 'var(--green)';
+    banner.style.color       = color || 'var(--green)';
+    document.getElementById('click-banner-text').textContent = bannerText;
+    banner.style.display = 'flex';
+
+    Map3D.getMap().getCanvas().style.cursor = 'crosshair';
+
+    // Registrar click UNA sola vez (excepto waypoint que se repite)
+    _clickFn = e => {
+      _handleClick(e.lngLat.lat, e.lngLat.lng);
+      if (mode !== 'waypoint') {
+        // Para takeoff y landing: un solo click, luego cancelar
+        Map3D.getMap().off('click', _clickFn);
+        _clickFn = null;
+      } else {
+        // Para waypoint: re-registrar para el siguiente
+        Map3D.getMap().once('click', _clickFn);
+      }
+    };
+
+    if (mode === 'waypoint') {
+      Map3D.getMap().once('click', _clickFn);
+    } else {
+      Map3D.getMap().once('click', _clickFn);
+    }
   }
 
-  function removeDrone(id) {
-    WS.send({ type: 'remove_drone', drone_id: id });
+  function _cancelMode() {
+    if (_clickFn) {
+      Map3D.getMap().off('click', _clickFn);
+      _clickFn = null;
+    }
+    _mode = null;
+    document.getElementById('click-banner').style.display = 'none';
+    Map3D.getMap().getCanvas().style.cursor = '';
+    // Quitar activo de botones
+    document.getElementById('btn-takeoff')?.classList.remove('active');
+    document.getElementById('btn-landing')?.classList.remove('active');
+    document.getElementById('btn-add-wp')?.classList.remove('active');
   }
 
-  function clearAll() {
-    WS.send({ type: 'reset' });
+  function _handleClick(lat, lon) {
+    if (_mode === 'takeoff') {
+      _setTakeoff(lat, lon);
+    } else if (_mode === 'landing') {
+      _setLanding(lat, lon);
+    } else if (_mode === 'waypoint') {
+      _addWaypoint(lat, lon);
+    }
+    if (_mode !== 'waypoint') _cancelMode();
   }
 
-  // ── Flight modes ──────────────────────────────────────────────────────────
-  function setMode(mode) {
-    const d = DroneState.getSelected();
-    if (!d) { log('Selecciona un dron primero', 'warn'); return; }
-
-    const params = {};
-    if (mode === 'ALT_HOLD') params.altitude = parseFloat(document.getElementById('p-alt').value);
-    if (mode === 'RTL')      params.safe_alt  = parseFloat(document.getElementById('p-rtl-alt').value);
-
-    WS.send({ type: 'set_mode', drone_id: d.id, mode, params });
-
-    // Show/hide ACRO rate controls
-    document.getElementById('acro-panel').style.display = mode === 'ACRO' ? 'block' : 'none';
-
-    // Show mode label on map
-    const ml = document.getElementById('mode-label');
-    ml.textContent = `MODE: ${mode}`;
-    ml.style.display = 'block';
-    setTimeout(() => ml.style.display = 'none', 2500);
-
-    refreshModeButtons(mode);
-    log(`Modo → ${mode}`, 'info');
+  // ── TAKEOFF ───────────────────────────────────────────────────────────────
+  function activateTakeoff() {
+    const btn = document.getElementById('btn-takeoff');
+    if (_mode === 'takeoff') { _cancelMode(); return; }
+    btn.classList.add('active');
+    _enterMapClick('takeoff', '↑  CLICK = PUNTO DE DESPEGUE', '#00ff88');
+    log('Click en el mapa para fijar el punto de takeoff', 'info');
   }
 
-  function refreshModeButtons(activeMode) {
-    document.querySelectorAll('.btn-mode').forEach(b => {
-      b.classList.toggle('active', b.dataset.mode === activeMode);
-    });
-    document.getElementById('acro-panel').style.display =
-      activeMode === 'ACRO' ? 'block' : 'none';
+  function _setTakeoff(lat, lon) {
+    _tkPoint = { lat, lon };
+
+    // Actualizar info
+    const info = document.getElementById('tk-info');
+    info.textContent = `✓ ${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+    info.classList.add('done');
+
+    // Marker en mapa
+    Map3D.setTakeoffMarker(lat, lon);
+
+    // Mandar al servidor
+    WS.send({ type: 'set_takeoff_point', lat, lon });
+
+    log(`✦ Takeoff: ${lat.toFixed(5)}, ${lon.toFixed(5)}`, 'info');
+    _showLabel('↑ TAKEOFF FIJADO', '#00ff88');
   }
 
-  // ── ACRO rate inputs ──────────────────────────────────────────────────────
-  function acroInput(axis, value) {
-    document.getElementById(`acro-${axis}-v`).textContent = value;
-    const d = DroneState.getSelected();
-    if (!d) return;
-    WS.send({ type: 'acro_rates', drone_id: d.id, axis, rate: parseFloat(value) });
+  // ── LANDING ───────────────────────────────────────────────────────────────
+  function activateLanding() {
+    const btn = document.getElementById('btn-landing');
+    if (_mode === 'landing') { _cancelMode(); return; }
+    btn.classList.add('active');
+    _enterMapClick('landing', '↓  CLICK = PUNTO DE ATERRIZAJE', '#ffaa00');
+    log('Click en el mapa para fijar el punto de landing', 'info');
   }
 
-  // ── Parameters ────────────────────────────────────────────────────────────
-  function setSpeed(v) {
-    const d = DroneState.getSelected();
-    if (!d) return;
-    WS.send({ type: 'set_speed', drone_id: d.id, speed: parseFloat(v) });
+  function _setLanding(lat, lon) {
+    _ldPoint = { lat, lon };
+
+    const info = document.getElementById('ld-info');
+    info.textContent = `✓ ${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+    info.classList.add('done');
+
+    Map3D.setLandingMarker(lat, lon);
+    WS.send({ type: 'set_landing_point', lat, lon });
+
+    log(`✦ Landing: ${lat.toFixed(5)}, ${lon.toFixed(5)}`, 'info');
+    _showLabel('↓ LANDING FIJADO', '#ffaa00');
   }
 
-  function setAltHold(v) {
-    const d = DroneState.getSelected();
-    if (!d) return;
-    WS.send({ type: 'set_altitude_hold', drone_id: d.id, altitude: parseFloat(v) });
+  // ── FORMACIÓN ─────────────────────────────────────────────────────────────
+  function selectFormation(btn, f) {
+    document.querySelectorAll('.btn-formation').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    _formation = f;
+    log('Formación: ' + f.toUpperCase());
   }
 
-  function setRTLAlt(v) {
-    const d = DroneState.getSelected();
-    if (d) d._rtl_safe_alt = parseFloat(v);
-  }
-
-  // ── Waypoints ─────────────────────────────────────────────────────────────
-  function startAddWP() {
-    const d = DroneState.getSelected();
-    if (!d) { log('Selecciona un dron primero', 'warn'); return; }
-    _wpAddActive = true;
-    document.getElementById('btn-add-wp').classList.add('active');
-    document.getElementById('click-mode').textContent = 'CLICK EN MAPA PARA WP · ESC cancela';
-    document.getElementById('click-mode').style.display = 'block';
-
-    Map3D.enterWpMode((lat, lon) => {
-      const baseAlt = parseFloat(document.getElementById('p-alt').value) || 50;
-      // Pedir altitud real del terreno al servidor y sumar la altura configurada
-      WS.send({ type: 'get_elevation', lat, lon });
-      const wpIdx = (DroneState.get(d.id)?.waypoints?.length || 0);
-
-      // Añadir WP con altitud AGL configurada
-      WS.send({ type: 'add_waypoint', drone_id: d.id,
-                waypoint: { lat, lon, alt: baseAlt, wp_type: 'WAYPOINT' } });
-
-      // Marker visual en el mapa con altitud
-      Map3D.addWPMarker(lat, lon, baseAlt, wpIdx, d.color);
-      log(`WP${wpIdx} → ${lat.toFixed(5)}, ${lon.toFixed(5)} @ ${baseAlt}m AGL`, 'info');
-    });
-  }
-
-  function clearWPs() {
-    const d = DroneState.getSelected();
-    if (!d) return;
-    WS.send({ type: 'plan_mission', drone_id: d.id, pattern: 'clear',
-              waypoints: [] });
-    Map3D.exitWpMode();
-    renderWPList([]);
-  }
-
-  function renderWPList(wps) {
-    const el = document.getElementById('wp-list');
-    el.innerHTML = '';
-    (wps || []).forEach((wp, i) => {
-      const row = document.createElement('div');
-      row.className = 'wp-item';
-      row.innerHTML = `<span class="wp-num">WP${i}</span>
-        <span>${wp.lat?.toFixed(5)}, ${wp.lon?.toFixed(5)}</span>
-        <span style="color:var(--text-dim)">@${wp.alt}m</span>`;
-      el.appendChild(row);
-    });
-  }
-
-  // ── Mission planner ───────────────────────────────────────────────────────
-  function planMission() {
-    const d = DroneState.getSelected();
-    if (!d) { log('Selecciona un dron primero', 'warn'); return; }
-    const pattern = document.getElementById('pattern-sel').value;
-    const alt     = parseFloat(document.getElementById('p-plan-alt').value);
-    const center  = Map3D.getMap().getCenter();
-    const bounds  = Map3D.getMap().getBounds();
-
-    WS.send({
-      type: 'plan_mission',
-      drone_id: d.id,
-      pattern,
-      altitude: alt,
-      origin: { lat: d.lat, lon: d.lon },
-      target: { lat: center.lat + 0.01, lon: center.lng },
-      centre: { lat: center.lat, lon: center.lng },
-      bounds: { n: bounds.getNorth(), s: bounds.getSouth(),
-                e: bounds.getEast(),  w: bounds.getWest() },
-      n_drones: DroneState.getAll().length,
-      drone_index: DroneState.getAll().findIndex(x => x.id === d.id),
-    });
-    log(`Planificando misión ${pattern}…`, 'info');
-  }
-
-  // ── Simulation ────────────────────────────────────────────────────────────
+  // ── INICIAR SIM ───────────────────────────────────────────────────────────
   function startSim() {
-    if (!DroneState.getAll().length) { log('No hay drones', 'warn'); return; }
+    if (!_tkPoint) {
+      log('⚠ Primero fija el punto de TAKEOFF', 'warn');
+      _showLabel('⚠ DEFINE EL TAKEOFF', '#ffaa00');
+      return;
+    }
+
+    const n   = parseInt(document.getElementById('p-ndrones').value) || 1;
+    const alt = parseFloat(document.getElementById('p-alt').value)   || 50;
+    const spd = parseFloat(document.getElementById('p-speed').value) || 10;
+    const landing = _ldPoint || { lat: _tkPoint.lat + 0.005, lon: _tkPoint.lon };
+
+    // Lanzar formación en el servidor
+    WS.send({
+      type:      'formation_launch',
+      takeoff:   _tkPoint,
+      landing,
+      formation: _formation,
+      n_drones:  n,
+      altitude:  alt,
+      speed:     spd,
+    });
+
+    // Arrancar simulación
     WS.send({ type: 'start_simulation' });
+
     document.getElementById('btn-start').style.display = 'none';
     document.getElementById('btn-stop').style.display  = 'block';
     document.getElementById('sim-hud').style.display   = 'block';
-    _simStartT = Date.now();
-    log('▶ Simulación iniciada', 'warn');
+
+    log(`▶ ${n} drones · formación ${_formation} · ${alt}m · ${spd}m/s`, 'warn');
+    _showLabel(`▶ ${n} DRONES EN VUELO`, '#00ff88');
   }
 
   function stopSim() {
@@ -209,261 +199,174 @@ const UI = (() => {
     log('■ Simulación detenida');
   }
 
-  // ── Takeoff ───────────────────────────────────────────────────────────────
-  function takeoff() {
-    const d = DroneState.getSelected();
-    if (!d) { log('Selecciona un dron primero', 'warn'); return; }
-    const alt = parseFloat(document.getElementById('p-takeoff-alt').value) || 30;
-    WS.send({ type: 'mavlink_command', drone_id: d.id, command: 'TAKEOFF', params: { alt } });
-    WS.send({ type: 'set_mode', drone_id: d.id, mode: 'LOITER', params: {} });
-    log(`↑ TAKEOFF → ${alt}m [${d.name}]`, 'info');
-    _showModeLabel('↑ TAKEOFF', 'var(--green)');
+  // ── ABORT — todos al takeoff ──────────────────────────────────────────────
+  function abortAll() {
+    WS.send({ type: 'abort_all', home: _tkPoint });
+    log('⚠ ABORT — todos los drones vuelven al takeoff', 'err');
+    _showLabel('⚠ ABORT — RTL TODOS', '#ff3344');
   }
 
-  // ── Landing ───────────────────────────────────────────────────────────────
-  function landing() {
-    const d = DroneState.getSelected();
-    if (!d) { log('Selecciona un dron primero', 'warn'); return; }
-    WS.send({ type: 'set_mode', drone_id: d.id, mode: 'LAND', params: {} });
-    log(`↓ LAND [${d.name}]`, 'warn');
-    _showModeLabel('↓ LAND', 'var(--amber)');
+  // ── CLEAR ─────────────────────────────────────────────────────────────────
+  function clearAll() {
+    WS.send({ type: 'reset' });
+    WS.send({ type: 'stop_simulation' });
+    _tkPoint = null; _ldPoint = null;
+    document.getElementById('tk-info').textContent = 'Sin definir — pulsa el botón y haz click en el mapa';
+    document.getElementById('tk-info').classList.remove('done');
+    document.getElementById('ld-info').textContent = 'Sin definir — pulsa el botón y haz click en el mapa';
+    document.getElementById('ld-info').classList.remove('done');
+    document.getElementById('btn-start').style.display = 'block';
+    document.getElementById('btn-stop').style.display  = 'none';
+    document.getElementById('sim-hud').style.display   = 'none';
+    Map3D.clearMissionMarkers();
+    _cancelMode();
+    log('Limpiado', 'warn');
   }
 
-  // ── Area de vuelo ─────────────────────────────────────────────────────────
-  let _areaCorners = [];
-
-  function startDrawArea() {
-    const d = DroneState.getSelected();
-    if (!d) { log('Selecciona un dron primero', 'warn'); return; }
-    _areaCorners = [];
-    document.getElementById('btn-draw-area').classList.add('active');
-    document.getElementById('area-coords').textContent = 'Click 1: esquina NW…';
-    document.getElementById('click-mode').textContent = 'CLICK 1/2: ESQUINA NW del área [ESC cancela]';
-    document.getElementById('click-mode').style.display = 'block';
-    Map3D.getMap().getCanvas().style.cursor = 'crosshair';
-
-    Map3D.enterWpMode((lat, lon) => {
-      _areaCorners.push({ lat, lon });
-      if (_areaCorners.length === 1) {
-        document.getElementById('area-coords').textContent = `NW: ${lat.toFixed(4)},${lon.toFixed(4)} — click 2: SE`;
-        document.getElementById('click-mode').textContent = 'CLICK 2/2: ESQUINA SE del área [ESC cancela]';
-      } else if (_areaCorners.length === 2) {
-        // Draw rectangle on map
-        const [c1, c2] = _areaCorners;
-        const bounds = {
-          n: Math.max(c1.lat, c2.lat), s: Math.min(c1.lat, c2.lat),
-          e: Math.max(c1.lon, c2.lon), w: Math.min(c1.lon, c2.lon),
-        };
-        Map3D.drawArea(bounds);
-        const el = document.getElementById('area-coords');
-        el.textContent = `NW:${bounds.n.toFixed(4)},${bounds.w.toFixed(4)} → SE:${bounds.s.toFixed(4)},${bounds.e.toFixed(4)}`;
-        el.classList.add('defined');
-        el._bounds = bounds;
-        document.getElementById('btn-patrol').style.display = 'block';
-        Map3D.exitWpMode();
-        document.getElementById('btn-draw-area').classList.remove('active');
-        log('Área de vuelo definida', 'info');
-      }
-    });
+  // ── WAYPOINTS extra ───────────────────────────────────────────────────────
+  function activateWaypoint() {
+    if (_mode === 'waypoint') { _cancelMode(); return; }
+    document.getElementById('btn-add-wp')?.classList.add('active');
+    _enterMapClick('waypoint', '✛  CLICK = AÑADIR WAYPOINT', '#00ccff');
+    log('Click en el mapa para añadir waypoints. ESC para terminar.', 'info');
   }
 
-  function clearArea() {
-    _areaCorners = [];
-    Map3D.clearArea();
-    Map3D.exitWpMode();
-    const el = document.getElementById('area-coords');
-    el.textContent = 'Sin área definida';
-    el.classList.remove('defined');
-    el._bounds = null;
-    document.getElementById('btn-patrol').style.display = 'none';
-    document.getElementById('btn-draw-area').classList.remove('active');
-    log('Área borrada');
-  }
-
-  function patrolArea() {
-    const d = DroneState.getSelected();
-    if (!d) { log('Selecciona un dron primero', 'warn'); return; }
-    const el = document.getElementById('area-coords');
-    if (!el._bounds) { log('Define un área primero', 'warn'); return; }
-    const alt = parseFloat(document.getElementById('p-plan-alt').value) || 60;
-    WS.send({
-      type: 'plan_mission',
-      drone_id: d.id,
-      pattern: 'grid',
-      altitude: alt,
-      bounds: el._bounds,
-      clearance: 30,
-    });
-    WS.send({ type: 'set_mode', drone_id: d.id, mode: 'AUTO', params: {} });
-    log(`⟳ Patrulla de área iniciada [${d.name}]`, 'warn');
-    _showModeLabel('⟳ PATROL AREA', 'var(--green)');
-  }
-
-  // ── Abort mission ────────────────────────────────────────────────────────
-  function abortMission() {
-    const d = DroneState.getSelected();
-    if (!d) { log('Selecciona un dron primero', 'warn'); return; }
-
-    // Gather rally point if set
-    const rallyEl = document.getElementById('rally-coords');
-    let msg = { type: 'abort_mission', drone_id: d.id };
-    if (rallyEl && rallyEl._lat) {
-      msg.rally_lat = rallyEl._lat;
-      msg.rally_lon = rallyEl._lon;
-      msg.rally_alt = parseFloat(document.getElementById('p-rtl-alt').value) || 60;
-    }
-    WS.send(msg);
-
-    // Visual feedback
-    const ml = document.getElementById('mode-label');
-    ml.textContent = '⚠ ABORT — MISIÓN INTERRUMPIDA';
-    ml.style.borderColor = 'var(--red)';
-    ml.style.color = 'var(--red)';
-    ml.style.display = 'block';
-    setTimeout(() => {
-      ml.style.display = 'none';
-      ml.style.borderColor = '';
-      ml.style.color = '';
-    }, 4000);
-
-    log('⚠ ABORT enviado — dron dirige a rally/home', 'err');
-  }
-
-  // ── Rally point ───────────────────────────────────────────────────────────
-  function startSetRally() {
-    const d = DroneState.getSelected();
-    if (!d) { log('Selecciona un dron primero', 'warn'); return; }
-    document.getElementById('btn-set-rally').classList.add('active');
-    Map3D.enterWpMode((lat, lon) => {
-      const alt = parseFloat(document.getElementById('p-rtl-alt').value) || 60;
-      // Store on DOM element for abortMission to read
-      const el = document.getElementById('rally-coords');
-      el._lat = lat;
-      el._lon = lon;
-      el.textContent = `RALLY: ${lat.toFixed(5)}, ${lon.toFixed(5)}`;
-      el.style.color = 'var(--amber)';
-      // Send to server
-      WS.send({ type: 'set_rally_point', drone_id: d.id, lat, lon, alt });
-      log(`Rally point fijado: ${lat.toFixed(5)}, ${lon.toFixed(5)}`, 'warn');
-      // Draw rally marker on map
-      Map3D.setRallyMarker(lat, lon, d.color);
-      Map3D.exitWpMode();
-      document.getElementById('btn-set-rally').classList.remove('active');
-    });
-  }
-
-  function clearRally() {
+  function _addWaypoint(lat, lon) {
     const d = DroneState.getSelected();
     if (!d) return;
-    const el = document.getElementById('rally-coords');
-    el._lat = null; el._lon = null;
-    el.textContent = 'Sin rally – usará HOME';
-    el.style.color = '';
-    WS.send({ type: 'set_rally_point', drone_id: d.id, lat: null, lon: null });
-    Map3D.clearRallyMarker();
-    log('Rally point eliminado');
+    const alt   = parseFloat(document.getElementById('p-alt')?.value) || 50;
+    const wpIdx = d.waypoints?.length || 0;
+    WS.send({ type: 'add_waypoint', drone_id: d.id,
+              waypoint: { lat, lon, alt, wp_type: 'WAYPOINT' } });
+    Map3D.addWPMarker(lat, lon, alt, wpIdx, d.color);
+    log(`WP${wpIdx} → ${lat.toFixed(4)}, ${lon.toFixed(4)} @ ${alt}m`);
   }
 
-  // ── Map helpers (delegates to Map3D) ─────────────────────────────────────
+  function clearWPs() {
+    const d = DroneState.getSelected();
+    if (!d) return;
+    WS.send({ type: 'plan_mission', drone_id: d.id, pattern: 'clear', waypoints: [] });
+    document.getElementById('wp-list').innerHTML = '';
+    _cancelMode();
+  }
+
+  function renderWPList(wps) {
+    const el = document.getElementById('wp-list');
+    if (!el) return;
+    el.innerHTML = (wps || []).map((wp, i) =>
+      `<div class="wp-item">
+        <span class="wp-num">WP${i}</span>
+        <span>${wp.lat?.toFixed(4)}, ${wp.lon?.toFixed(4)}</span>
+        <span style="color:var(--text-dim)">@${wp.alt}m</span>
+      </div>`
+    ).join('');
+  }
+
+  // ── Modos individuales ────────────────────────────────────────────────────
+  function setMode(mode) {
+    const d = DroneState.getSelected();
+    if (!d) return;
+    WS.send({ type: 'set_mode', drone_id: d.id, mode, params: {} });
+    refreshModeButtons(mode);
+    log(`MODE → ${mode} [${d.name}]`);
+  }
+
+  function refreshModeButtons(active) {
+    document.querySelectorAll('.btn-mode').forEach(b =>
+      b.classList.toggle('active', b.dataset.mode === active));
+  }
+
+  function setSpeed(v) {
+    const d = DroneState.getSelected();
+    if (d) WS.send({ type: 'set_speed', drone_id: d.id, speed: parseFloat(v) });
+  }
+
+  function setAltHold(v) {
+    const d = DroneState.getSelected();
+    if (d) WS.send({ type: 'set_altitude_hold', drone_id: d.id, altitude: parseFloat(v) });
+  }
+
+  function setRTLAlt() {}
+  function acroInput(axis, val) {
+    document.getElementById(`acro-${axis}-v`).textContent = val;
+  }
+  function planMission() {}
+  function startAddWP() { activateWaypoint(); }
+
+  // ── Mapa ──────────────────────────────────────────────────────────────────
   function toggle3D()   { Map3D.toggle3D(); }
   function toggleSat()  { Map3D.toggleSat(); }
   function tiltView()   { Map3D.tiltView(); }
   function resetNorth() { Map3D.resetNorth(); }
   function flyHome() {
-    const d = DroneState.getSelected();
-    if (d) Map3D.flyTo(d.lat, d.lon, 14);
-    else Map3D.fitDrones(DroneState.getAll());
-  }
-
-  // ── FPV / Camera follow ───────────────────────────────────────────────────
-  // Ciclo: LIBRE → FOLLOW (desde atrás) → FPV (desde morro) → LIBRE
-  function toggleFPV() {
-    const d = DroneState.getSelected();
-    if (!d) { log('Selecciona un dron para activar FPV', 'warn'); return; }
-    Map3D.toggleFollow(d.id);
-    const btn = document.getElementById('btn-fpv');
-    // Leer estado actual
-    const badge = document.getElementById('fpv-badge');
-    if (badge && badge.style.display !== 'none') {
-      if (badge.textContent.includes('FOLLOW')) {
-        btn.classList.add('active');
-        btn.textContent = 'FPV1';
-        log('🎥 Cámara FOLLOW activada — pulsa de nuevo para FPV frontal', 'info');
-      } else if (badge.textContent.includes('FPV')) {
-        btn.textContent = 'FPV2';
-        log('📡 Vista FPV frontal activada — pulsa de nuevo para liberar cámara', 'info');
-      }
-    } else {
-      btn.classList.remove('active');
-      btn.textContent = 'FPV';
-      log('Cámara libre');
-    }
-  }
-
-  // ── Export ────────────────────────────────────────────────────────────────
-  function exportMission() {
     const drones = DroneState.getAll();
-    if (!drones.length) { log('Sin datos', 'warn'); return; }
-    const lines = ['=== DRONE SIM MISSION EXPORT ===',
-                   'Date: ' + new Date().toISOString(), ''];
-    drones.forEach(d => {
-      lines.push(`--- ${d.name} [${d.id}] ---`);
-      lines.push(`  Mode: ${d.mode} | Speed: ${d.speed} m/s`);
-      lines.push(`  Position: ${d.lat.toFixed(6)}, ${d.lon.toFixed(6)} @ ${d.alt.toFixed(0)}m`);
-      lines.push('  Waypoints:');
-      (d.waypoints||[]).forEach((wp,i) =>
-        lines.push(`    WP${i}: ${wp.lat.toFixed(6)}, ${wp.lon.toFixed(6)} @ ${wp.alt}m`));
-      lines.push('');
-    });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([lines.join('\n')], {type:'text/plain'}));
-    a.download = 'mission_' + Date.now() + '.txt';
-    a.click();
-    log('Misión exportada');
+    if (drones.length) Map3D.fitDrones(drones);
+    else if (_tkPoint) Map3D.flyTo(_tkPoint.lat, _tkPoint.lon, 16);
+  }
+  function exportMission() {
+    log('Export no implementado aún', 'warn');
+  }
+
+  // ── FPV ───────────────────────────────────────────────────────────────────
+  function toggleFPV() {
+    const d = DroneState.getSelected() || DroneState.getAll()[0];
+    if (!d) { log('Sin dron para FPV', 'warn'); return; }
+    Map3D.toggleFollow(d.id);
+    const badge = document.getElementById('fpv-badge');
+    const btn   = document.getElementById('btn-fpv');
+    const on    = badge?.style.display !== 'none';
+    btn.classList.toggle('active', on);
+  }
+
+  // ── Label flash ───────────────────────────────────────────────────────────
+  function _showLabel(text, color) {
+    const ml = document.getElementById('mode-label');
+    if (!ml) return;
+    ml.textContent = text;
+    ml.style.color       = color || 'var(--amber)';
+    ml.style.borderColor = color || 'var(--amber)';
+    ml.style.display = 'block';
+    clearTimeout(ml._t);
+    ml._t = setTimeout(() => { ml.style.display = 'none'; }, 3000);
   }
 
   // ── Log ───────────────────────────────────────────────────────────────────
   function log(msg, level = '') {
     const el = document.getElementById('log-entries');
+    if (!el) return;
     const ts  = new Date().toTimeString().slice(0,8);
     const div = document.createElement('div');
     div.className = 'log-line ' + level;
     div.innerHTML = `<span class="log-ts">${ts}</span>${msg}`;
     el.appendChild(div);
     el.scrollTop = el.scrollHeight;
-    // Cap at 200 lines
-    while (el.children.length > 200) el.removeChild(el.firstChild);
-
-    document.getElementById('status-bar').textContent = msg.slice(0, 60);
+    while (el.children.length > 150) el.removeChild(el.firstChild);
+    const sb = document.getElementById('status-bar');
+    if (sb) sb.textContent = msg.slice(0, 80);
   }
 
-  // ── Clock ─────────────────────────────────────────────────────────────────
-  function _updateClock() {
-    document.getElementById('clock').textContent =
-      new Date().toUTCString().slice(17, 25) + ' UTC';
-  }
+  // WS events
+  WS.on('formation_ready', msg => {
+    const n = msg.result?.n_drones || '?';
+    log(`✓ ${n} drones desplegados en formación ${msg.result?.formation}`, 'info');
+    // Auto-seleccionar primer dron para FPV
+    const drones = DroneState.getAll();
+    if (drones.length) DroneState.select(drones[0].id);
+  });
 
-  function _showModeLabel(text, color) {
-    const ml = document.getElementById('mode-label');
-    ml.textContent = text;
-    ml.style.borderColor = color || 'var(--amber)';
-    ml.style.color = color || 'var(--amber)';
-    ml.style.display = 'block';
-    setTimeout(() => { ml.style.display = 'none'; }, 3000);
-  }
+  WS.on('abort_all_sent', msg => {
+    log(`⚠ RTL enviado a ${msg.drone_count} drones`, 'err');
+  });
 
   return {
     init, connect,
-    addDrone, removeDrone, clearAll,
+    activateTakeoff, activateLanding, selectFormation,
+    startSim, stopSim, abortAll, clearAll,
+    activateWaypoint, clearWPs, renderWPList,
     setMode, refreshModeButtons, acroInput,
     setSpeed, setAltHold, setRTLAlt,
-    takeoff, landing,
-    startAddWP, clearWPs, renderWPList,
-    planMission,
-    startSim, stopSim,
-    abortMission, startSetRally, clearRally,
-    startDrawArea, clearArea, patrolArea,
+    planMission, startAddWP, exportMission,
     toggle3D, toggleSat, tiltView, resetNorth, flyHome, toggleFPV,
-    exportMission, log,
+    log,
   };
 })();

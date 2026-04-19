@@ -590,3 +590,165 @@ body {
 
 /* ── Área de vuelo ── */
 #area-coords.defined { color: var(--amber); }
+
+/* ── Mission points panel ── */
+.mission-points { margin-bottom: 8px; }
+.mp-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border);
+}
+.mp-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 6px currentColor;
+}
+.mp-info { flex: 1; display: flex; flex-direction: column; gap: 1px; }
+.mp-label { font-family: 'Orbitron', monospace; font-size: 8px; letter-spacing: 2px; color: var(--text-dim); }
+.mp-coords { font-size: 8px; color: var(--green); letter-spacing: 0.5px; }
+.mp-coords.unset { color: var(--text-dim); }
+.mp-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-family: 'Orbitron', monospace;
+  font-size: 7px;
+  letter-spacing: 1px;
+  padding: 3px 6px;
+  cursor: pointer;
+  transition: all 0.12s;
+  white-space: nowrap;
+}
+.mp-btn:hover, .mp-btn.active {
+  border-color: var(--green);
+  color: var(--green);
+  background: var(--green-dark);
+}
+
+/* ── Formation buttons ── */
+.formation-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px;
+  margin-bottom: 8px;
+}
+.btn-formation {
+  padding: 5px 4px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all 0.12s;
+  text-align: center;
+}
+.btn-formation:hover { border-color: var(--cyan); color: var(--cyan); }
+.btn-formation.active { border-color: var(--green); color: var(--green); background: var(--green-dark); }
+
+/* ── Big action buttons ── */
+.btn-big {
+  width: 100%;
+  padding: 12px 8px;
+  margin-bottom: 4px;
+  border: none;
+  font-family: 'Orbitron', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  cursor: pointer;
+  transition: all 0.15s;
+  line-height: 1.5;
+}
+.btn-big-green  { background: var(--green); color: var(--bg); }
+.btn-big-green:hover  { background: #00ffaa; box-shadow: 0 0 20px rgba(0,255,136,0.4); }
+.btn-big-green.active { background: #00ffaa; box-shadow: 0 0 25px rgba(0,255,136,0.6); animation: pulse-green 1s ease infinite; }
+.btn-big-amber  { background: transparent; border: 2px solid var(--amber); color: var(--amber); }
+.btn-big-amber:hover  { background: rgba(255,170,0,0.15); box-shadow: 0 0 16px rgba(255,170,0,0.3); }
+.btn-big-amber.active { background: rgba(255,170,0,0.2); box-shadow: 0 0 20px rgba(255,170,0,0.4); animation: pulse-amber 1s ease infinite; }
+.btn-big-red    { background: transparent; border: 2px solid var(--red); color: var(--red); }
+.btn-big-red:hover    { background: rgba(255,50,50,0.15); box-shadow: 0 0 16px rgba(255,50,50,0.3); }
+
+@keyframes pulse-green { 0%,100%{box-shadow:0 0 15px rgba(0,255,136,0.4)} 50%{box-shadow:0 0 30px rgba(0,255,136,0.8)} }
+@keyframes pulse-amber { 0%,100%{box-shadow:0 0 15px rgba(255,170,0,0.3)} 50%{box-shadow:0 0 25px rgba(255,170,0,0.7)} }
+
+/* ── Step info ── */
+.step-info {
+  font-size: 9px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+  line-height: 1.6;
+  letter-spacing: 0.5px;
+}
+.step-info.done { color: var(--green); }
+
+/* ── Click banner ── */
+#click-banner {
+  position: absolute;
+  bottom: 60px; left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  background: rgba(5,10,7,0.95);
+  border: 1px solid var(--green);
+  color: var(--green);
+  font-family: 'Orbitron', monospace;
+  font-size: 13px;
+  letter-spacing: 3px;
+  padding: 10px 28px;
+  animation: banner-pulse 0.8s steps(1) infinite;
+  white-space: nowrap;
+  pointer-events: none;
+}
+@keyframes banner-pulse { 50% { border-color: rgba(0,255,136,0.3); } }
+
+/* ── FPV badge ── */
+#fpv-badge {
+  position: absolute;
+  top: 12px; left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  background: rgba(5,10,7,0.92);
+  border: 1px solid var(--cyan);
+  color: var(--cyan);
+  font-family: 'Orbitron', monospace;
+  font-size: 10px;
+  letter-spacing: 3px;
+  padding: 4px 16px;
+  pointer-events: none;
+}
+
+/* ── Sim HUD ── */
+#sim-hud {
+  position: absolute;
+  bottom: 14px; left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  background: rgba(5,10,7,0.93);
+  border: 1px solid var(--green);
+  padding: 5px 20px;
+  font-family: 'Orbitron', monospace;
+  font-size: 11px;
+  color: var(--green);
+  letter-spacing: 3px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* ── Mode label ── */
+#mode-label {
+  position: absolute;
+  top: 10px; left: 50%;
+  transform: translateX(-50%);
+  font-family: 'Orbitron', monospace;
+  font-size: 10px;
+  letter-spacing: 3px;
+  z-index: 30;
+  background: rgba(5,10,7,0.9);
+  padding: 3px 12px;
+  border: 1px solid var(--amber);
+  color: var(--amber);
+}

@@ -583,6 +583,47 @@ const Map3D = (() => {
     if (map.getSource('flight-area')) map.removeSource('flight-area');
   }
 
+  // ── Takeoff / Landing markers ────────────────────────────────────────────
+  let _tkMarker  = null;
+  let _ldMarker  = null;
+  let _wpMarkers = [];
+
+  function setTakeoffMarker(lat, lon) {
+    if (_tkMarker) _tkMarker.remove();
+    const el = document.createElement('div');
+    el.style.cssText = 'display:flex;flex-direction:column;align-items:center;pointer-events:none;';
+    el.innerHTML = `
+      <div style="font-family:Orbitron,monospace;font-size:8px;color:#00ff88;
+        background:rgba(0,0,0,0.8);padding:2px 6px;border:1px solid #00ff88;
+        letter-spacing:1px;white-space:nowrap;">✦ TAKEOFF</div>
+      <div style="width:0;height:0;border-left:8px solid transparent;
+        border-right:8px solid transparent;border-top:14px solid #00ff88;"></div>`;
+    _tkMarker = new maplibregl.Marker({ element: el, anchor: 'top' })
+      .setLngLat([lon, lat]).addTo(map);
+  }
+
+  function setLandingMarker(lat, lon) {
+    if (_ldMarker) _ldMarker.remove();
+    const el = document.createElement('div');
+    el.style.cssText = 'display:flex;flex-direction:column;align-items:center;pointer-events:none;';
+    el.innerHTML = `
+      <div style="font-family:Orbitron,monospace;font-size:8px;color:#ff3344;
+        background:rgba(0,0,0,0.8);padding:2px 6px;border:1px solid #ff3344;
+        letter-spacing:1px;white-space:nowrap;">✦ LANDING</div>
+      <div style="width:0;height:0;border-left:8px solid transparent;
+        border-right:8px solid transparent;border-top:14px solid #ff3344;"></div>`;
+    _ldMarker = new maplibregl.Marker({ element: el, anchor: 'top' })
+      .setLngLat([lon, lat]).addTo(map);
+  }
+
+  function clearMissionMarkers() {
+    if (_tkMarker) { _tkMarker.remove(); _tkMarker = null; }
+    if (_ldMarker) { _ldMarker.remove(); _ldMarker = null; }
+    if (_rallyMarker) { _rallyMarker.remove(); _rallyMarker = null; }
+    _wpMarkers.forEach(m => m.remove());
+    _wpMarkers = [];
+  }
+
   // ── Rally point marker ───────────────────────────────────────────────────
   let _rallyMarker = null;
 
@@ -664,36 +705,31 @@ const Map3D = (() => {
     const drone = DroneState.get(_fpvDroneId);
     if (!drone) { stopFollow(); return; }
 
-    const yaw    = drone.yaw  || 0;
-    const pitch  = drone.pitch || 0;
-    const altAGL = Math.max(drone.alt, 2);
+    const yaw    = drone.yaw   || 0;
+    const altAGL = Math.max(drone.alt, 0);
     const speed  = drone.speed || 0;
 
-    // ── CHASE CAM: cámara 2-3m detrás y 1m por encima ──────────────────────
     if (_fpvMode === 'chase') {
-      // Calcular punto de cámara: 3m detrás del dron en dirección opuesta al heading
-      const BACK_M   = 8;    // metros detrás (más cerca = más inmersivo)
-      const DEG_PER_M = 1 / 111320;
-      const yawRad   = (yaw + 180) * Math.PI / 180;  // dirección opuesta
-      const camLon   = drone.lon + Math.sin(yawRad) * BACK_M * DEG_PER_M;
-      const camLat   = drone.lat + Math.cos(yawRad) * BACK_M * DEG_PER_M;
+      // ── CHASE CAM ─────────────────────────────────────────────────────────
+      // Zoom fijo muy cercano — equivale a estar a ~5-10m del dron
+      // zoom 20 ≈ resolución de 0.15m/px → muy cerca
+      // zoom 19 ≈ 0.3m/px, zoom 18 ≈ 0.6m/px
+      // Para ver el dron "a un metro" necesitamos zoom ~20-21 con pitch ~75°
 
-      // Zoom: cuanto más alto vuela, más alejada la cámara
-      // zoom 20 = 1m sobre el suelo, zoom 18 = ~50m, zoom 16 = ~200m
-      const targetZoom  = Math.max(15.5, 20.5 - altAGL * 0.04 - speed * 0.02);
-      // Pitch: casi horizontal cuando va rápido, más cenital si está quieto
-      const targetPitch = Math.min(82, 65 + speed * 0.5 + pitch * 0.3);
+      // Distancia de cámara depende de la altitud
+      // En el suelo: muy cerca (zoom 20). A 100m: algo más lejos (zoom 18)
+      const targetZoom  = 20.2 - altAGL * 0.018;
+      const clampedZoom = Math.max(16, Math.min(21, targetZoom));
 
-      // Interpolación suave (inercia de cámara)
-      const T = 0.12;  // 0=sin inercia, 1=instantáneo
-      _camState.lon     = _lerp(_camState.lon,     camLon,      T);
-      _camState.lat     = _lerp(_camState.lat,      camLat,     T);
-      _camState.bearing = _lerpAngle(_camState.bearing, yaw,    T);
-      _camState.pitch   = _lerp(_camState.pitch,   targetPitch, T * 0.5);
-      _camState.zoom    = _lerp(_camState.zoom,    targetZoom,  T * 0.6);
+      // Pitch: 75° = casi horizontal pero se ve el suelo delante
+      // Cuando va rápido se inclina más (más inmersivo)
+      const targetPitch = Math.min(80, 72 + speed * 0.3);
 
-      // El centro del mapa apunta al dron (no a la cámara)
-      // bearing = heading del dron para que "adelante" sea la dirección de vuelo
+      // Suavizado con inercia ligera para movimiento fluido
+      _camState.bearing = _lerpAngle(_camState.bearing, yaw,         0.18);
+      _camState.pitch   = _lerp(_camState.pitch,         targetPitch, 0.10);
+      _camState.zoom    = _lerp(_camState.zoom,           clampedZoom, 0.12);
+
       map.jumpTo({
         center:  [drone.lon, drone.lat],
         bearing: _camState.bearing,
@@ -701,14 +737,14 @@ const Map3D = (() => {
         zoom:    _camState.zoom,
       });
 
-    // ── FPV FRONTAL: desde los ojos del piloto ───────────────────────────────
     } else if (_fpvMode === 'fpv') {
-      const targetZoom  = Math.max(16, 21 - altAGL * 0.05);
-      const targetPitch = 85;  // casi totalmente horizontal
-
-      _camState.bearing = _lerpAngle(_camState.bearing, yaw, 0.15);
-      _camState.pitch   = _lerp(_camState.pitch,  targetPitch, 0.08);
-      _camState.zoom    = _lerp(_camState.zoom,   targetZoom,  0.1);
+      // ── FPV FRONTAL ───────────────────────────────────────────────────────
+      // Pitch 85° = completamente horizontal, como gafas FPV reales
+      // Zoom muy alto para sensación de velocidad
+      const targetZoom  = Math.max(17, 21.5 - altAGL * 0.03);
+      _camState.bearing = _lerpAngle(_camState.bearing, yaw,        0.20);
+      _camState.pitch   = _lerp(_camState.pitch,         85,         0.08);
+      _camState.zoom    = _lerp(_camState.zoom,           targetZoom, 0.12);
 
       map.jumpTo({
         center:  [drone.lon, drone.lat],
@@ -747,6 +783,7 @@ const Map3D = (() => {
     init, addDroneMarker, updateDroneMarker, removeDroneMarker,
     updateWaypointLayer, enterWpMode, exitWpMode,
     drawArea, clearArea,
+    setTakeoffMarker, setLandingMarker, clearMissionMarkers,
     setRallyMarker, clearRallyMarker,
     startFollow, stopFollow, toggleFollow,
     addWPMarker,

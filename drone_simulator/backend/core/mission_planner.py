@@ -108,6 +108,102 @@ class MissionPlanner:
             {"lat": target["lat"], "lon": target["lon"], "alt": alt, "wp_type": "WAYPOINT"},
         ]
 
+    def plan_formation(self, cfg: dict) -> dict:
+        """
+        Genera posiciones de formación para N drones.
+        Cada dron sale del takeoff con un offset lateral y vuela al landing.
+        Formaciones: line, v, diamond, grid, circle
+        """
+        import math
+        tk  = cfg.get("takeoff", {})
+        ld  = cfg.get("landing", {})
+        n   = int(cfg.get("n_drones", 1))
+        alt = float(cfg.get("altitude", 50))
+        spd = float(cfg.get("speed", 12))
+        formation = cfg.get("formation", "line")
+        colors = ["#00ff88","#00ccff","#ffaa00","#ff3344",
+                  "#aa88ff","#ff88cc","#88ffcc","#ffff44",
+                  "#ff6600","#00ffff","#ff00ff","#ffff00"]
+
+        # Calcular offsets de formación en metros
+        offsets = self._formation_offsets(formation, n)
+
+        drones = []
+        for i, (ox, oy) in enumerate(offsets):
+            # Convertir offset (metros) a grados
+            dlat = oy / 111320
+            dlon = ox / (111320 * math.cos(math.radians(tk.get("lat", 40))) + 1e-9)
+
+            start_lat = tk.get("lat", 40.416) + dlat
+            start_lon = tk.get("lon", -3.703) + dlon
+            end_lat   = ld.get("lat", tk.get("lat", 40.416) + 0.005) + dlat
+            end_lon   = ld.get("lon", tk.get("lon", -3.703)) + dlon
+
+            drone_cfg = {
+                "lat":   start_lat,
+                "lon":   start_lon,
+                "alt":   0,
+                "name":  f"UAV-{i+1:02d}",
+                "color": colors[i % len(colors)],
+                "armed": True,
+                "waypoints": [
+                    {"lat": start_lat, "lon": start_lon, "alt": alt,      "wp_type": "WAYPOINT"},
+                    {"lat": end_lat,   "lon": end_lon,   "alt": alt,      "wp_type": "WAYPOINT"},
+                    {"lat": end_lat,   "lon": end_lon,   "alt": 0,        "wp_type": "LAND"},
+                ]
+            }
+            drones.append(drone_cfg)
+
+        return {
+            "formation": formation,
+            "n_drones":  n,
+            "drones":    drones,
+            "takeoff":   tk,
+            "landing":   ld,
+        }
+
+    @staticmethod
+    def _formation_offsets(formation: str, n: int):
+        """Devuelve lista de (x_metros, y_metros) offset por dron."""
+        import math
+        SEP = 8  # metros entre drones
+
+        if formation == "line":
+            # Línea horizontal perpendicular al vuelo
+            return [(i * SEP - (n-1)*SEP/2, 0) for i in range(n)]
+
+        elif formation == "v":
+            # Formación en V: líder al frente, resto en diagonal
+            offs = [(0, 0)]
+            for i in range(1, n):
+                side = i if i % 2 == 1 else -i
+                offs.append((side * SEP, -abs(side) * SEP * 0.8))
+            return offs[:n]
+
+        elif formation == "diamond":
+            # Diamante: frente, dos lados, cola
+            pts = [(0, SEP), (-SEP, 0), (SEP, 0), (0, -SEP)]
+            # Repetir patrón si hay más de 4
+            result = []
+            for i in range(n):
+                ring  = i // 4
+                idx   = i %  4
+                bx, by = pts[idx]
+                result.append((bx * (ring+1), by * (ring+1)))
+            return result
+
+        elif formation == "grid":
+            cols = math.ceil(math.sqrt(n))
+            return [((i % cols) * SEP - cols*SEP/2,
+                     (i // cols) * SEP) for i in range(n)]
+
+        elif formation == "circle":
+            return [(SEP * 1.5 * math.sin(2*math.pi*i/n),
+                     SEP * 1.5 * math.cos(2*math.pi*i/n)) for i in range(n)]
+
+        else:
+            return [(0, 0)] * n
+
     @staticmethod
     def _lon_range(w, e, step):
         lons = []

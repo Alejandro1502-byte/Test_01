@@ -82,10 +82,10 @@ class Drone:
         self.name  = name
         self.color = color
 
-        # Position (degrees / metres AGL)
+        # Position — alt es AGL (sobre el terreno), no AMSL
         self.lat = lat
         self.lon = lon
-        self.alt = alt        # current altitude AGL
+        self.alt = alt        # AGL: empieza en 0 = en el suelo
 
         # Velocity (m/s in local NED-ish frame)
         self.vx = 0.0   # north
@@ -166,10 +166,10 @@ class Drone:
         """Advance simulation by dt seconds. Returns telemetry dict."""
         if self.phase == FlightPhase.IDLE and not self.armed:
             return None
-        # Si armado pero IDLE, poner en LOITER para que empiece a simular
+        # Si armado pero IDLE → arrancar despegue
         if self.phase == FlightPhase.IDLE and self.armed:
             self.phase = FlightPhase.TAKEOFF
-            self.target_alt = max(self.alt + 30, 30)
+            self.target_alt = 30.0   # 30m AGL por defecto
 
         terrain_alt = terrain.get_elevation(self.lat, self.lon)
 
@@ -189,17 +189,22 @@ class Drone:
         # Apply velocity to position
         self._integrate_position(dt)
 
-        # Mantener mínima altitud sobre el terreno (clearance de seguridad)
-        SAFETY_CLEARANCE = 5.0  # metros mínimos sobre el terreno
-        if self.alt < terrain_alt + SAFETY_CLEARANCE:
+        # El simulador trabaja en AGL puro (alt=0 es el suelo)
+        # terrain_alt es AMSL pero nosotros lo ignoramos — alt=0 ya ES el suelo
+        SAFETY_CLEARANCE = 2.0
+        if self.alt < 0:
+            self.alt = 0.0
+            self.vz  = max(0.0, self.vz)
+        if self.alt < SAFETY_CLEARANCE:
             if self.phase in (FlightPhase.LAND, FlightPhase.RTL_LAND, FlightPhase.IDLE):
-                self.alt = terrain_alt
+                self.alt = 0.0
                 self.vz  = 0.0
+                self.vx  = self.vx * 0.8
+                self.vy  = self.vy * 0.8
             else:
-                # En vuelo: subir para evitar el terreno
-                self.alt = terrain_alt + SAFETY_CLEARANCE
+                self.alt = SAFETY_CLEARANCE
                 if self.vz < 0:
-                    self.vz = 0.5  # pequeño empuje hacia arriba
+                    self.vz = 0.3
 
         # Battery drain (rough)
         self.battery = max(0.0, self.battery - 0.001 * dt)
@@ -302,11 +307,12 @@ class Drone:
                                          dt, self.MAX_SPEED_LOITER, self.TURN_RATE_LOITER)
 
         elif self.phase == FlightPhase.RTL_LAND:
-            ground = terrain.get_elevation(self.lat, self.lon)
-            self._vert_ctrl(ground, dt)
+            self._vert_ctrl(0.0, dt)   # bajar hasta AGL=0
             self.vx *= 0.9
             self.vy *= 0.9
-            if abs(self.alt - ground) < 0.5:
+            if self.alt < 1.0:
+                self.alt  = 0.0
+                self.vz   = 0.0
                 self.phase = FlightPhase.IDLE
                 self.vx = self.vy = self.vz = 0.0
 
@@ -428,7 +434,7 @@ class Drone:
             "color":    self.color,
             "lat":      round(self.lat, 7),
             "lon":      round(self.lon, 7),
-            "alt":      round(self.alt, 2),
+            "alt":      round(max(self.alt, 0), 2),   # AGL
             "roll":     round(self.roll, 1),
             "pitch":    round(self.pitch, 1),
             "yaw":      round(self.yaw, 1),

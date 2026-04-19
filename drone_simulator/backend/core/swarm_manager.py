@@ -8,6 +8,8 @@ from core.drone import Drone
 class SwarmManager:
     def __init__(self):
         self._drones: Dict[str, Drone] = {}
+        self.takeoff_point = None
+        self.landing_point = None
 
     def add_drone(self, cfg: dict) -> Drone:
         d = Drone(
@@ -37,3 +39,7 @@ class SwarmManager:
 
     def reset(self):
         self._drones.clear()
+
+        # Global mission points
+        self.takeoff_point = None
+        self.landing_point = None
