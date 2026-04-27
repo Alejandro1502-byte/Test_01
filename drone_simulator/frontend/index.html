@@ -16,21 +16,47 @@
   <div class="logo">DRONE<span>SIM</span> <span class="logo-sub">// ARDUPILOT SITL</span></div>
   <div id="clock">--:--:-- UTC</div>
   <div id="conn-badge" class="badge-disconnected">● DISCONNECTED</div>
-  <div id="status-bar">CONECTA Y PULSA TAKEOFF PARA EMPEZAR</div>
+  <div id="status-bar">SYSTEM READY</div>
 </header>
 
 <div id="main">
+
+  <!-- ═══ SIDEBAR ═══ -->
   <aside id="sidebar">
 
-    <!-- PASO 1: TAKEOFF -->
+    <!-- MISIÓN -->
     <div class="panel-section">
-      <div class="section-title">◈ PASO 1 — DESPEGUE</div>
-      <div class="step-info" id="tk-info">Sin definir — pulsa el botón y haz click en el mapa</div>
-      <button class="btn-big btn-big-green" id="btn-takeoff" onclick="UI.activateTakeoff()">
-        ↑ TAKEOFF<br><span style="font-size:8px;opacity:0.7">Pulsa → click en mapa</span>
-      </button>
+      <div class="section-title">◈ MISIÓN</div>
 
-      <div class="param-row" style="margin-top:6px">
+      <!-- Puntos takeoff / landing -->
+      <div class="section-subtitle">PUNTOS DE VUELO</div>
+
+      <button class="btn-action btn-green" id="btn-takeoff" onclick="UI.activateTakeoff()">
+        ↑ TAKEOFF — CLICK EN MAPA
+      </button>
+      <div class="point-status" id="tk-status">Sin definir</div>
+
+      <button class="btn-action btn-amber" id="btn-landing" onclick="UI.activateLanding()">
+        ↓ LANDING — CLICK EN MAPA
+      </button>
+      <div class="point-status" id="ld-status">Sin definir (opcional)</div>
+
+      <!-- Formación -->
+      <div class="section-subtitle">FORMACIÓN</div>
+      <div class="formation-grid">
+        <button class="btn-tac active" data-f="line"    onclick="UI.selectFormation(this,'line')">— LÍNEA</button>
+        <button class="btn-tac"        data-f="v"       onclick="UI.selectFormation(this,'v')">∧ EN V</button>
+        <button class="btn-tac"        data-f="diamond" onclick="UI.selectFormation(this,'diamond')">◆ ROMBO</button>
+        <button class="btn-tac"        data-f="grid"    onclick="UI.selectFormation(this,'grid')">⊞ REJILLA</button>
+        <button class="btn-tac"        data-f="circle"  onclick="UI.selectFormation(this,'circle')">○ CÍRCULO</button>
+      </div>
+
+      <!-- Parámetros -->
+      <div class="param-row">
+        <label>Nº DRONES</label>
+        <input type="number" id="p-ndrones" value="1" min="1" max="12" step="1">
+      </div>
+      <div class="param-row">
         <label>ALTITUD m</label>
         <input type="number" id="p-alt" value="50" min="10" max="300" step="5">
       </div>
@@ -40,75 +66,54 @@
       </div>
     </div>
 
-    <!-- PASO 2: FORMACIÓN -->
-    <div class="panel-section">
-      <div class="section-title">◈ PASO 2 — FORMACIÓN</div>
-      <div class="param-row">
-        <label>Nº DRONES</label>
-        <input type="number" id="p-ndrones" value="1" min="1" max="12" step="1">
-      </div>
-      <div class="formation-grid">
-        <button class="btn-formation active" data-f="line"    onclick="UI.selectFormation(this,'line')">— LÍNEA</button>
-        <button class="btn-formation"        data-f="v"       onclick="UI.selectFormation(this,'v')">∧ EN V</button>
-        <button class="btn-formation"        data-f="diamond" onclick="UI.selectFormation(this,'diamond')">◆ ROMBO</button>
-        <button class="btn-formation"        data-f="grid"    onclick="UI.selectFormation(this,'grid')">⊞ REJILLA</button>
-        <button class="btn-formation"        data-f="circle"  onclick="UI.selectFormation(this,'circle')">○ CÍRCULO</button>
-      </div>
-    </div>
-
-    <!-- PASO 3: LANDING -->
-    <div class="panel-section">
-      <div class="section-title">◈ PASO 3 — ATERRIZAJE</div>
-      <div class="step-info" id="ld-info">Sin definir — pulsa el botón y haz click en el mapa</div>
-      <button class="btn-big btn-big-amber" id="btn-landing" onclick="UI.activateLanding()">
-        ↓ LANDING<br><span style="font-size:8px;opacity:0.7">Pulsa → click en mapa</span>
-      </button>
-    </div>
-
-    <!-- ABORT -->
-    <div class="panel-section">
-      <div class="section-title">◈ EMERGENCIA</div>
-      <button class="btn-big btn-big-red" onclick="UI.abortAll()">
-        ⚠ ABORT — VOLVER AL INICIO<br><span style="font-size:8px;opacity:0.7">Todos los drones al punto de takeoff</span>
-      </button>
-    </div>
-
-    <!-- DRON SELECCIONADO -->
-    <div class="panel-section" id="drone-controls" style="display:none">
-      <div class="section-title">◈ DRON: <span id="sel-name">—</span></div>
-      <div class="mode-grid">
-        <button class="btn-mode" data-mode="AUTO"     onclick="UI.setMode('AUTO')">AUTO</button>
-        <button class="btn-mode" data-mode="LOITER"   onclick="UI.setMode('LOITER')">LOITER</button>
-        <button class="btn-mode" data-mode="ALT_HOLD" onclick="UI.setMode('ALT_HOLD')">ALT HOLD</button>
-        <button class="btn-mode" data-mode="ACRO"     onclick="UI.setMode('ACRO')">ACRO</button>
-      </div>
-      <div class="section-subtitle">WAYPOINTS EXTRA</div>
-      <button class="btn-tac" id="btn-add-wp" onclick="UI.activateWaypoint()">✛ CLICK MAPA → AÑADIR WP</button>
-      <button class="btn-tac" onclick="UI.clearWPs()">✕ LIMPIAR WPS</button>
-      <div id="wp-list"></div>
-    </div>
-
     <!-- SIMULACIÓN -->
     <div class="panel-section">
       <div class="section-title">◈ SIMULACIÓN</div>
       <div class="slider-row">
-        <label>VELOCIDAD</label>
+        <label>VEL ×</label>
         <input type="range" id="sim-speed" min="1" max="20" step="1" value="3">
         <span id="sim-speed-v">3×</span>
       </div>
       <button class="btn-action btn-green" id="btn-start" onclick="UI.startSim()">▶ INICIAR SIM</button>
       <button class="btn-action btn-red"   id="btn-stop"  onclick="UI.stopSim()" style="display:none">■ DETENER</button>
-      <button class="btn-tac" onclick="UI.clearAll()" style="margin-top:4px">✕ LIMPIAR TODO</button>
+      <button class="btn-action btn-red"   id="btn-abort" onclick="UI.abortAll()">⚠ ABORT — VOLVER AL INICIO</button>
+      <button class="btn-tac" onclick="UI.clearAll()" style="margin-top:2px">✕ LIMPIAR TODO</button>
+    </div>
+
+    <!-- DRON SELECCIONADO -->
+    <div class="panel-section" id="drone-controls" style="display:none">
+      <div class="section-title">◈ DRON: <span id="sel-name">—</span></div>
+
+      <div class="section-subtitle">MODO DE VUELO</div>
+      <div class="mode-grid">
+        <button class="btn-mode" data-mode="AUTO"     onclick="UI.setMode('AUTO')">AUTO</button>
+        <button class="btn-mode" data-mode="LOITER"   onclick="UI.setMode('LOITER')">LOITER</button>
+        <button class="btn-mode" data-mode="ALT_HOLD" onclick="UI.setMode('ALT_HOLD')">ALT HOLD</button>
+        <button class="btn-mode" data-mode="ACRO"     onclick="UI.setMode('ACRO')">ACRO</button>
+        <button class="btn-mode btn-rtl" data-mode="RTL" onclick="UI.setMode('RTL')" style="grid-column:1/-1">⚠ RTL</button>
+      </div>
+
+      <div class="section-subtitle">WAYPOINTS</div>
+      <button class="btn-tac" id="btn-add-wp" onclick="UI.activateWaypoint()">✛ AÑADIR WP EN MAPA</button>
+      <button class="btn-tac" onclick="UI.clearWPs()">✕ LIMPIAR WPS</button>
+      <div id="wp-list"></div>
+    </div>
+
+    <!-- FLOTA -->
+    <div class="panel-section">
+      <div class="section-title">◈ FLOTA</div>
+      <div id="fleet-list"></div>
     </div>
 
     <!-- CONEXIÓN -->
     <div class="panel-section">
-      <div class="section-title">◈ CONEXIÓN</div>
+      <div class="section-title">◈ MAVLINK / SITL</div>
       <div class="param-row">
         <label>SERVER</label>
         <input type="text" id="srv-addr" value="ws://localhost:8765/ws" style="width:130px;font-size:9px">
       </div>
       <button class="btn-tac" onclick="UI.connect()">⟳ CONNECT</button>
+      <div class="info-label" id="sitl-status">SITL: DEMO MODE</div>
     </div>
 
     <!-- LOG -->
@@ -119,7 +124,7 @@
 
   </aside>
 
-  <!-- MAPA -->
+  <!-- ═══ MAPA 3D ═══ -->
   <div id="map-wrap">
     <div id="map"></div>
     <div class="corner tl"></div><div class="corner tr"></div>
@@ -134,10 +139,10 @@
       <button class="map-btn"        id="btn-fpv"   onclick="UI.toggleFPV()">FPV</button>
     </div>
 
-    <!-- Instrucción de click en mapa -->
+    <!-- Banner click en mapa -->
     <div id="click-banner" style="display:none">
       <span id="click-banner-text">CLICK EN EL MAPA</span>
-      <span style="opacity:0.6;margin-left:12px">[ESC cancela]</span>
+      <span style="opacity:0.5;margin-left:10px;font-size:9px">[ESC cancela]</span>
     </div>
 
     <!-- HUD -->
@@ -147,21 +152,24 @@
       <span id="hud-phase">—</span>
     </div>
 
-    <!-- Badge FPV -->
     <div id="fpv-badge" style="display:none">🎥 CHASE CAM</div>
-
-    <!-- Flash de modo -->
     <div id="mode-label" style="display:none"></div>
   </div>
 
-  <!-- TELEMETRÍA -->
+  <!-- ═══ TELEMETRÍA ═══ -->
   <aside id="rightpanel">
     <div class="rp-header">◈ TELEMETRÍA</div>
     <div id="drone-cards-wrap">
-      <div id="empty-state">SIN DRONES<br><br>1. Pulsa TAKEOFF<br>2. Click en el mapa<br>3. Pulsa INICIAR SIM</div>
+      <div id="empty-state">
+        SIN DRONES<br><br>
+        1. ⟳ CONNECT<br>
+        2. ↑ TAKEOFF → click mapa<br>
+        3. ▶ INICIAR SIM
+      </div>
       <div id="drone-cards"></div>
     </div>
   </aside>
+
 </div>
 
 <script src="js/ws.js"></script>
