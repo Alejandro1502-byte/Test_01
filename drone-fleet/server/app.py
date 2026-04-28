@@ -38,12 +38,9 @@ def health():
     return jsonify({'status': 'ok'})
 
 
-# ── DRONES CRUD ────────────────────────────────────────────────────────────────
-
 @app.route('/api/drones', methods=['GET'])
 def list_drones():
-    result = [serialize(d) for d in drones_col.find()]
-    return jsonify(result)
+    return jsonify([serialize(d) for d in drones_col.find()])
 
 
 @app.route('/api/drones/<drone_id>', methods=['GET'])
@@ -60,24 +57,30 @@ def get_drone(drone_id):
 @app.route('/api/drones', methods=['POST'])
 def create_drone():
     data = request.get_json() or {}
-    required = ['modelo', 'fabricante']
-    missing = [f for f in required if not data.get(f)]
+    missing = [f for f in ['modelo', 'fabricante'] if not data.get(f)]
     if missing:
         return jsonify({'error': f'Faltan campos: {", ".join(missing)}'}), 400
 
+    # Support both lat/lon (geo) and x/y (grid)
+    if data.get('lat') is not None:
+        pos = {'lat': float(data['lat']), 'lon': float(data.get('lon', 0))}
+    else:
+        pos = {'x': float(data.get('x', 50)), 'y': float(data.get('y', 50))}
+
     drone = {
-        'modelo': data['modelo'],
+        'modelo':     data['modelo'],
         'fabricante': data['fabricante'],
-        'estado': 'en_tierra',
-        'posicion': {'x': data.get('x', 0.0), 'y': data.get('y', 0.0)},
-        'destino': None,
+        'estado':     'en_tierra',
+        'posicion':   pos,
+        'destino':    None,
         'bateria_pct': 100.0,
-        'velocidad': data.get('velocidad', 1.0),
+        'velocidad':  float(data.get('velocidad', 12)),
+        'altitud':    float(data.get('altitud', 120)),
         'created_at': datetime.utcnow(),
     }
     result = drones_col.insert_one(drone)
     drone['_id'] = result.inserted_id
-    log_event(result.inserted_id, 'creado', f"Dron {drone['modelo']} creado")
+    log_event(result.inserted_id, 'creado', f"UAV {drone['modelo']} registrado")
     return jsonify(serialize(drone)), 201
 
 
@@ -92,8 +95,6 @@ def delete_drone(drone_id):
     return jsonify({'deleted': drone_id})
 
 
-# ── ÓRDENES ────────────────────────────────────────────────────────────────────
-
 @app.route('/api/drones/<drone_id>/orden', methods=['POST'])
 def orden(drone_id):
     try:
@@ -107,68 +108,64 @@ def orden(drone_id):
 
     data = request.get_json() or {}
     accion = data.get('accion')
-
     update = {}
-    msg = ''
 
     if accion == 'despegar':
-        if drone['estado'] not in ('en_tierra',):
-            return jsonify({'error': 'El dron no está en tierra'}), 409
+        if drone['estado'] != 'en_tierra':
+            return jsonify({'error': 'El UAV no está en tierra'}), 409
         if drone['bateria_pct'] < 10:
-            return jsonify({'error': 'Batería insuficiente para despegar'}), 409
+            return jsonify({'error': 'Batería insuficiente'}), 409
         update = {'estado': 'volando'}
-        msg = 'Despegue ordenado'
+        msg = 'Despegue ejecutado'
 
     elif accion == 'aterrizar':
-        if drone['estado'] not in ('volando',):
-            return jsonify({'error': 'El dron no está volando'}), 409
+        if drone['estado'] != 'volando':
+            return jsonify({'error': 'El UAV no está volando'}), 409
         update = {'estado': 'aterrizando', 'destino': None}
-        msg = 'Aterrizaje ordenado'
+        msg = 'Aterrizaje iniciado'
 
     elif accion == 'ir_a':
-        x = data.get('x')
-        y = data.get('y')
-        if x is None or y is None:
-            return jsonify({'error': 'Faltan coordenadas x e y'}), 400
-        if drone['estado'] not in ('volando',):
-            return jsonify({'error': 'El dron debe estar volando para recibir destino'}), 409
-        update = {'destino': {'x': float(x), 'y': float(y)}}
-        msg = f'Destino establecido: ({x}, {y})'
+        if drone['estado'] != 'volando':
+            return jsonify({'error': 'El UAV debe estar volando'}), 409
+        # Support lat/lon or x/y
+        if data.get('lat') is not None:
+            dest = {'lat': float(data['lat']), 'lon': float(data['lon'])}
+        elif data.get('x') is not None:
+            dest = {'x': float(data['x']), 'y': float(data['y'])}
+        else:
+            return jsonify({'error': 'Faltan coordenadas de destino'}), 400
+        update = {'destino': dest}
+        msg = f'Destino asignado'
 
     elif accion == 'recargar':
         if drone['estado'] != 'en_tierra':
-            return jsonify({'error': 'Solo se puede recargar en tierra'}), 409
-        update = {'bateria_pct': 100.0, 'estado': 'en_tierra'}
+            return jsonify({'error': 'Solo se recarga en tierra'}), 409
+        update = {'bateria_pct': 100.0}
         msg = 'Batería recargada al 100%'
 
     elif accion == 'mantenimiento':
         update = {'estado': 'mantenimiento', 'destino': None}
-        msg = 'Dron en mantenimiento'
+        msg = 'UAV en mantenimiento'
 
     elif accion == 'activar':
         if drone['estado'] != 'mantenimiento':
-            return jsonify({'error': 'El dron no está en mantenimiento'}), 409
+            return jsonify({'error': 'El UAV no está en mantenimiento'}), 409
         update = {'estado': 'en_tierra'}
-        msg = 'Dron activado'
+        msg = 'UAV activado'
 
     else:
         return jsonify({'error': f'Acción desconocida: {accion}'}), 400
 
     drones_col.update_one({'_id': oid}, {'$set': update})
     log_event(oid, accion, msg)
-    drone = drones_col.find_one({'_id': oid})
-    return jsonify({'ok': True, 'mensaje': msg, 'drone': serialize(drone)})
+    return jsonify({'ok': True, 'mensaje': msg, 'drone': serialize(drones_col.find_one({'_id': oid}))})
 
-
-# ── EVENTOS ────────────────────────────────────────────────────────────────────
 
 @app.route('/api/eventos', methods=['GET'])
 def list_events():
     drone_id = request.args.get('drone_id')
-    query = {}
-    if drone_id:
-        query['drone_id'] = drone_id
-    events = list(events_col.find(query).sort('ts', -1).limit(50))
+    query = {'drone_id': drone_id} if drone_id else {}
+    events = list(events_col.find(query).sort('ts', -1).limit(60))
     for e in events:
         e['id'] = str(e['_id'])
         del e['_id']
