@@ -48,10 +48,20 @@ services:
     environment:
       MONGO_URI: mongodb://admin:admin123@mongo:27017/
       DB_NAME: dronesdb
-      TICK_SECONDS: "2"
-      BATTERY_DRAIN: "0.5"
-      LANDING_DRAIN: "0.2"
-      ARRIVAL_THRESHOLD: "0.5"
+      # USE_SITL=false #→ fallback propio (para prototipar sin ArduPilot)
+      # USE_SITL=true  → conecta a ArduCopter SITL real
+      USE_SITL: "false"
+      SITL_HOST: host.docker.internal   # donde corre ArduCopter en tu máquina
+      SITL_BASE_PORT: "14550"           # puerto UDP primer dron
+      TICK_SECONDS: "0.10"              # 10 Hz de actualización
+      BATTERY_DRAIN: "0.05"             # % batería por segundo en vuelo
+    # Cuando USE_SITL=true exponer puertos para que SITL externo los alcance
+    # ports:
+    #   - "14550:14550/udp"
+    #   - "14560:14560/udp"
+    #   - "14570:14570/udp"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # para Linux
 
   client:
     build: ./client

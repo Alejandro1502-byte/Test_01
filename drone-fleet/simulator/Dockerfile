@@ -2,8 +2,12 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir pymongo
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git wget curl \
+    && rm -rf /var/lib/apt/lists/*
 
-COPY simulator.py .
+RUN pip install --no-cache-dir pymongo pymavlink
 
-CMD ["python", "simulator.py"]
+COPY *.py .
+
+CMD ["python", "sitl_bridge.py"]

@@ -7,13 +7,13 @@ from bson.errors import InvalidId
 from datetime import datetime
 
 MONGO_URI = os.environ.get('MONGO_URI', 'mongodb://mongo:27017/')
-DB_NAME = os.environ.get('DB_NAME', 'dronesdb')
+DB_NAME   = os.environ.get('DB_NAME',   'dronesdb')
 
 app = Flask(__name__)
 CORS(app)
 
-client = MongoClient(MONGO_URI)
-db = client[DB_NAME]
+client     = MongoClient(MONGO_URI)
+db         = client[DB_NAME]
 drones_col = db['drones']
 events_col = db['events']
 
@@ -27,153 +27,181 @@ def serialize(drone):
 def log_event(drone_id, tipo, detalle=None):
     events_col.insert_one({
         'drone_id': str(drone_id),
-        'tipo': tipo,
-        'detalle': detalle,
-        'ts': datetime.utcnow()
+        'tipo':     tipo,
+        'detalle':  detalle,
+        'ts':       datetime.utcnow()
     })
 
 
-@app.route('/api/health', methods=['GET'])
+@app.route('/api/health')
 def health():
     return jsonify({'status': 'ok'})
 
 
-# ── DRONES CRUD ────────────────────────────────────────────────────────────────
+# ── DRONES ────────────────────────────────────────────────────────────────────
 
-@app.route('/api/drones', methods=['GET'])
+@app.route('/api/drones')
 def list_drones():
-    result = [serialize(d) for d in drones_col.find()]
-    return jsonify(result)
+    return jsonify([serialize(d) for d in drones_col.find()])
 
 
-@app.route('/api/drones/<drone_id>', methods=['GET'])
-def get_drone(drone_id):
+@app.route('/api/drones/<did>')
+def get_drone(did):
     try:
-        drone = drones_col.find_one({'_id': ObjectId(drone_id)})
+        d = drones_col.find_one({'_id': ObjectId(did)})
     except InvalidId:
         return jsonify({'error': 'ID no válido'}), 400
-    if not drone:
-        return jsonify({'error': 'Dron no encontrado'}), 404
-    return jsonify(serialize(drone))
+    if not d:
+        return jsonify({'error': 'No encontrado'}), 404
+    return jsonify(serialize(d))
 
 
 @app.route('/api/drones', methods=['POST'])
 def create_drone():
-    data = request.get_json() or {}
-    required = ['modelo', 'fabricante']
-    missing = [f for f in required if not data.get(f)]
+    data    = request.get_json() or {}
+    missing = [f for f in ['modelo', 'fabricante'] if not data.get(f)]
     if missing:
-        return jsonify({'error': f'Faltan campos: {", ".join(missing)}'}), 400
+        return jsonify({'error': f'Faltan: {", ".join(missing)}'}), 400
+
+    # Posición: acepta lat/lon (geo) o x/y (grid)
+    if data.get('lat') is not None:
+        pos  = {'lat': float(data['lat']), 'lon': float(data.get('lon', 0))}
+        home = pos.copy()   # punto de referencia para NED ↔ lat/lon
+    else:
+        pos  = {'x': float(data.get('x', 50)), 'y': float(data.get('y', 50))}
+        home = None
 
     drone = {
-        'modelo': data['modelo'],
+        'modelo':     data['modelo'],
         'fabricante': data['fabricante'],
-        'estado': 'en_tierra',
-        'posicion': {'x': data.get('x', 0.0), 'y': data.get('y', 0.0)},
-        'destino': None,
+        'estado':     'en_tierra',
+        'posicion':   pos,
+        'home':       home,      # referencia NED para SITL
+        'destino':    None,
         'bateria_pct': 100.0,
-        'velocidad': data.get('velocidad', 1.0),
+        'velocidad':  float(data.get('velocidad', 12)),
+        'vel_m_s':    0.0,       # velocidad real de ArduCopter (m/s)
+        'altitud':    0.0,       # AGL en metros
+        'actitud':    {'roll': 0.0, 'pitch': 0.0, 'yaw': 0.0},
+        'mision':     data.get('mision'),
         'created_at': datetime.utcnow(),
     }
     result = drones_col.insert_one(drone)
     drone['_id'] = result.inserted_id
-    log_event(result.inserted_id, 'creado', f"Dron {drone['modelo']} creado")
+    log_event(result.inserted_id, 'creado',
+              f"UAV {drone['modelo']} registrado")
     return jsonify(serialize(drone)), 201
 
 
-@app.route('/api/drones/<drone_id>', methods=['DELETE'])
-def delete_drone(drone_id):
+@app.route('/api/drones/<did>', methods=['DELETE'])
+def delete_drone(did):
     try:
-        result = drones_col.delete_one({'_id': ObjectId(drone_id)})
+        r = drones_col.delete_one({'_id': ObjectId(did)})
     except InvalidId:
         return jsonify({'error': 'ID no válido'}), 400
-    if result.deleted_count == 0:
-        return jsonify({'error': 'Dron no encontrado'}), 404
-    return jsonify({'deleted': drone_id})
+    if r.deleted_count == 0:
+        return jsonify({'error': 'No encontrado'}), 404
+    return jsonify({'deleted': did})
 
 
-# ── ÓRDENES ────────────────────────────────────────────────────────────────────
+# ── ÓRDENES ───────────────────────────────────────────────────────────────────
 
-@app.route('/api/drones/<drone_id>/orden', methods=['POST'])
-def orden(drone_id):
+@app.route('/api/drones/<did>/orden', methods=['POST'])
+def orden(did):
     try:
-        oid = ObjectId(drone_id)
+        oid = ObjectId(did)
     except InvalidId:
         return jsonify({'error': 'ID no válido'}), 400
 
-    drone = drones_col.find_one({'_id': oid})
+    drone  = drones_col.find_one({'_id': oid})
     if not drone:
-        return jsonify({'error': 'Dron no encontrado'}), 404
+        return jsonify({'error': 'No encontrado'}), 404
 
-    data = request.get_json() or {}
+    data   = request.get_json() or {}
     accion = data.get('accion')
-
     update = {}
-    msg = ''
 
     if accion == 'despegar':
-        if drone['estado'] not in ('en_tierra',):
-            return jsonify({'error': 'El dron no está en tierra'}), 409
+        if drone['estado'] != 'en_tierra':
+            return jsonify({'error': 'No está en tierra'}), 409
         if drone['bateria_pct'] < 10:
-            return jsonify({'error': 'Batería insuficiente para despegar'}), 409
+            return jsonify({'error': 'Batería insuficiente'}), 409
         update = {'estado': 'volando'}
-        msg = 'Despegue ordenado'
+        msg    = 'Despegue ejecutado'
 
     elif accion == 'aterrizar':
-        if drone['estado'] not in ('volando',):
-            return jsonify({'error': 'El dron no está volando'}), 409
+        if drone['estado'] != 'volando':
+            return jsonify({'error': 'No está volando'}), 409
         update = {'estado': 'aterrizando', 'destino': None}
-        msg = 'Aterrizaje ordenado'
+        msg    = 'Aterrizaje iniciado'
 
     elif accion == 'ir_a':
-        x = data.get('x')
-        y = data.get('y')
-        if x is None or y is None:
-            return jsonify({'error': 'Faltan coordenadas x e y'}), 400
-        if drone['estado'] not in ('volando',):
-            return jsonify({'error': 'El dron debe estar volando para recibir destino'}), 409
-        update = {'destino': {'x': float(x), 'y': float(y)}}
-        msg = f'Destino establecido: ({x}, {y})'
+        if drone['estado'] != 'volando':
+            return jsonify({'error': 'Debe estar volando'}), 409
+        if data.get('lat') is not None:
+            dest = {'lat': float(data['lat']), 'lon': float(data['lon'])}
+            if data.get('alt'):
+                dest['alt'] = float(data['alt'])
+        elif data.get('x') is not None:
+            dest = {'x': float(data['x']), 'y': float(data['y'])}
+        else:
+            return jsonify({'error': 'Faltan coordenadas'}), 400
+        update = {'destino': dest}
+        msg    = 'Destino asignado'
 
     elif accion == 'recargar':
         if drone['estado'] != 'en_tierra':
-            return jsonify({'error': 'Solo se puede recargar en tierra'}), 409
-        update = {'bateria_pct': 100.0, 'estado': 'en_tierra'}
-        msg = 'Batería recargada al 100%'
+            return jsonify({'error': 'Solo en tierra'}), 409
+        update = {'bateria_pct': 100.0}
+        msg    = 'Batería recargada'
 
     elif accion == 'mantenimiento':
         update = {'estado': 'mantenimiento', 'destino': None}
-        msg = 'Dron en mantenimiento'
+        msg    = 'En mantenimiento'
 
     elif accion == 'activar':
         if drone['estado'] != 'mantenimiento':
-            return jsonify({'error': 'El dron no está en mantenimiento'}), 409
+            return jsonify({'error': 'No está en mantenimiento'}), 409
         update = {'estado': 'en_tierra'}
-        msg = 'Dron activado'
+        msg    = 'UAV activado'
 
     else:
         return jsonify({'error': f'Acción desconocida: {accion}'}), 400
 
     drones_col.update_one({'_id': oid}, {'$set': update})
     log_event(oid, accion, msg)
-    drone = drones_col.find_one({'_id': oid})
-    return jsonify({'ok': True, 'mensaje': msg, 'drone': serialize(drone)})
+    updated = serialize(drones_col.find_one({'_id': oid}))
+    return jsonify({'ok': True, 'mensaje': msg, 'drone': updated})
 
 
-# ── EVENTOS ────────────────────────────────────────────────────────────────────
+# ── TELEMETRÍA (solo lectura) ─────────────────────────────────────────────────
 
-@app.route('/api/eventos', methods=['GET'])
+@app.route('/api/drones/<did>/telemetria')
+def telemetria(did):
+    """Devuelve los campos de telemetría en tiempo real del dron."""
+    try:
+        d = drones_col.find_one({'_id': ObjectId(did)},
+                                {'actitud':1, 'vel_m_s':1, 'altitud':1,
+                                 'bateria_pct':1, 'velocidad':1, 'posicion':1})
+    except InvalidId:
+        return jsonify({'error': 'ID no válido'}), 400
+    if not d:
+        return jsonify({'error': 'No encontrado'}), 404
+    d['id'] = str(d['_id']); del d['_id']
+    return jsonify(d)
+
+
+# ── EVENTOS ───────────────────────────────────────────────────────────────────
+
+@app.route('/api/eventos')
 def list_events():
     drone_id = request.args.get('drone_id')
-    query = {}
-    if drone_id:
-        query['drone_id'] = drone_id
-    events = list(events_col.find(query).sort('ts', -1).limit(50))
-    for e in events:
-        e['id'] = str(e['_id'])
-        del e['_id']
+    query    = {'drone_id': drone_id} if drone_id else {}
+    evs      = list(events_col.find(query).sort('ts', -1).limit(60))
+    for e in evs:
+        e['id'] = str(e['_id']); del e['_id']
         e['ts'] = e['ts'].isoformat()
-    return jsonify(events)
+    return jsonify(evs)
 
 
 if __name__ == '__main__':
